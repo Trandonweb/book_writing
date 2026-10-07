@@ -37,38 +37,22 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-const root = document.getElementById("app");
-
 
 /* =========================================================
-   전역 상태
+   전역 변수
 ========================================================= */
 
 let user = null;
 let books = [];
+let currentBook = null;
+let currentChapter = 0;
 let saveTimer = null;
-let savedRange = null;
 
 
 /* =========================================================
-   기본 함수
+   공통 함수
 ========================================================= */
 
-const makeId = () =>
-  Date.now().toString(36) +
-  Math.random().toString(36).slice(2, 8);
-
-
-/*
- * Firebase Authentication에 실제로 저장되는 이메일은
- *
- *     아이디@book-writing.local
- *
- * 형식이다.
- *
- * 따라서 현재 로그인한 사용자의 아이디는
- * 이메일의 @ 앞부분으로 가져온다.
- */
 function getCurrentUserId() {
   if (!user) return "";
 
@@ -80,136 +64,139 @@ function getCurrentUserId() {
 }
 
 
-function getCurrentUserEmail() {
-  return user?.email || "";
+function getCurrentUserUid() {
+  return user ? user.uid : "";
 }
 
 
 function escapeHtml(value) {
-  return String(value ?? "").replace(/[&<>"']/g, char => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#39;"
-  }[char]));
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
 
 /* =========================================================
-   오류 메시지
+   Firebase 에러
 ========================================================= */
 
 function errorMessage(error) {
-  const messages = {
+  const code = error?.code || "";
 
-    /* Authentication */
+  switch (code) {
 
-    "auth/email-already-in-use":
-      "이미 가입된 아이디입니다.",
+    case "auth/invalid-credential":
+      return "아이디 또는 비밀번호가 올바르지 않습니다.";
 
-    "auth/invalid-email":
-      "아이디 형식이 올바르지 않습니다.",
+    case "auth/invalid-login-credentials":
+      return "아이디 또는 비밀번호가 올바르지 않습니다.";
 
-    "auth/weak-password":
-      "비밀번호는 6자 이상이어야 합니다.",
+    case "auth/user-not-found":
+      return "존재하지 않는 아이디입니다.";
 
-    "auth/invalid-credential":
-      "아이디 또는 비밀번호가 올바르지 않습니다.",
+    case "auth/wrong-password":
+      return "비밀번호가 올바르지 않습니다.";
 
-    "auth/user-not-found":
-      "존재하지 않는 아이디입니다.",
+    case "auth/email-already-in-use":
+      return "이미 존재하는 아이디입니다.";
 
-    "auth/wrong-password":
-      "비밀번호가 올바르지 않습니다.",
+    case "auth/weak-password":
+      return "비밀번호는 6자 이상이어야 합니다.";
 
-    "auth/too-many-requests":
-      "로그인 시도가 너무 많습니다. 잠시 후 다시 시도해 주세요.",
+    case "auth/invalid-email":
+      return "아이디 형식이 올바르지 않습니다.";
 
-    "auth/network-request-failed":
-      "네트워크 연결을 확인해 주세요.",
+    case "auth/operation-not-allowed":
+      return "Firebase Authentication에서 이메일/비밀번호 로그인이 활성화되어 있지 않습니다.";
 
-    "auth/operation-not-allowed":
-      "Firebase Authentication의 이메일/비밀번호 로그인이 활성화되어 있지 않습니다.",
+    case "auth/configuration-not-found":
+      return "Firebase Authentication 설정을 찾을 수 없습니다. Firebase Console의 Authentication 설정을 확인하세요.";
 
-    "auth/configuration-not-found":
-      "Firebase Authentication 설정을 찾을 수 없습니다. Firebase 콘솔의 Authentication 설정을 확인해 주세요.",
+    case "auth/invalid-api-key":
+      return "Firebase API Key가 올바르지 않습니다.";
 
-    "auth/invalid-api-key":
-      "Firebase API Key가 올바르지 않습니다.",
+    case "auth/app-not-authorized":
+      return "현재 사이트가 Firebase Authentication에서 허용되지 않은 도메인입니다.";
 
-    "auth/app-not-authorized":
-      "현재 사이트가 Firebase 프로젝트에서 허용되지 않았습니다.",
+    case "auth/unauthorized-domain":
+      return "현재 사이트 도메인이 Firebase Authentication의 승인된 도메인에 없습니다.";
 
-    "auth/unauthorized-domain":
-      "현재 사이트 도메인이 Firebase Authentication에서 허용되지 않았습니다.",
+    case "permission-denied":
+      return "Firestore 권한이 없습니다. Firestore 보안 규칙을 확인하세요.";
 
-    "auth/requires-recent-login":
-      "보안을 위해 다시 로그인해야 합니다.",
+    case "failed-precondition":
+      return "Firestore 설정 또는 인덱스 문제가 발생했습니다.";
 
+    case "unavailable":
+      return "Firebase 서버에 연결할 수 없습니다. 인터넷 연결을 확인하세요.";
 
-    /* Firestore */
-
-    "permission-denied":
-      "Firestore 권한이 없습니다. Firestore 보안 규칙을 확인해 주세요.",
-
-    "failed-precondition":
-      "Firestore 설정 또는 색인에 문제가 있습니다.",
-
-    "unavailable":
-      "Firebase 서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.",
-
-
-    /* Custom */
-
-    "custom/invalid-id":
-      "아이디는 영문 소문자, 숫자, 밑줄(_)만 사용할 수 있고 3~20자로 입력해 주세요.",
-
-    "custom/password-mismatch":
-      "비밀번호가 서로 일치하지 않습니다."
-
-  };
-
-  return (
-    messages[error?.code] ||
-    error?.message ||
-    "오류가 발생했습니다."
-  );
+    default:
+      return error?.message || "알 수 없는 오류가 발생했습니다.";
+  }
 }
 
 
-/* =========================================================
-   치명적 오류 화면
-========================================================= */
+function showError(message) {
+  const old = document.querySelector(".error-message");
+
+  if (old) old.remove();
+
+  const box = document.createElement("div");
+  box.className = "error-message";
+  box.textContent = message;
+
+  document.body.appendChild(box);
+
+  setTimeout(() => {
+    box.remove();
+  }, 5000);
+}
+
 
 function showFatalError(error) {
-  console.error("Fatal error:", error);
+  console.error(error);
 
-  root.innerHTML = `
-    <div class="auth">
-      <div class="auth-card">
+  document.body.innerHTML = `
+    <div style="
+      min-height:100vh;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:30px;
+      box-sizing:border-box;
+      font-family:Arial,sans-serif;
+    ">
+      <div style="
+        width:min(500px,100%);
+        padding:30px;
+        border:1px solid #ddd;
+        border-radius:16px;
+        background:white;
+        box-sizing:border-box;
+      ">
+        <h2 style="margin-top:0;">오류가 발생했습니다.</h2>
 
-        <div class="logo">
-          ✦ Book <span>Writing</span>
-        </div>
-
-        <h1>페이지를 불러오지 못했습니다.</h1>
-
-        <p class="sub">
+        <p style="line-height:1.6;">
           ${escapeHtml(errorMessage(error))}
         </p>
 
-        <button class="primary" id="reloadButton">
+        <button
+          onclick="location.reload()"
+          style="
+            padding:12px 18px;
+            border:0;
+            border-radius:8px;
+            cursor:pointer;
+          "
+        >
           새로고침
         </button>
-
       </div>
     </div>
   `;
-
-  document
-    .getElementById("reloadButton")
-    ?.addEventListener("click", () => location.reload());
 }
 
 
@@ -219,108 +206,69 @@ function showFatalError(error) {
 
 function authScreen() {
 
-  root.innerHTML = `
-    <div class="auth">
+  document.body.innerHTML = `
+    <div class="auth-container">
 
-      <div class="auth-card">
+      <div class="auth-box">
 
-        <div class="logo">
-          ✦ Book <span>Writing</span>
+        <h1>Book Writing</h1>
+
+        <div class="auth-tabs">
+          <button id="loginTab" class="active">로그인</button>
+          <button id="signupTab">회원가입</button>
         </div>
 
-        <h1>당신의 책을 시작하세요.</h1>
 
-        <p class="sub">
-          아이디어를 문장으로, 문장을 한 권의 책으로.
-        </p>
+        <div id="loginForm">
 
-        <div class="tabs">
-          <button
-            id="loginTab"
-            class="active"
-            type="button"
+          <input
+            id="loginId"
+            type="text"
+            placeholder="아이디"
+            autocomplete="username"
           >
+
+          <input
+            id="loginPassword"
+            type="password"
+            placeholder="비밀번호"
+            autocomplete="current-password"
+          >
+
+          <button id="loginButton">
             로그인
           </button>
 
-          <button
-            id="signupTab"
-            type="button"
+        </div>
+
+
+        <div id="signupForm" style="display:none;">
+
+          <input
+            id="signupId"
+            type="text"
+            placeholder="아이디"
+            autocomplete="username"
           >
+
+          <input
+            id="signupPassword"
+            type="password"
+            placeholder="비밀번호"
+            autocomplete="new-password"
+          >
+
+          <input
+            id="signupPassword2"
+            type="password"
+            placeholder="비밀번호 확인"
+            autocomplete="new-password"
+          >
+
+          <button id="signupButton">
             회원가입
           </button>
-        </div>
 
-        <form id="authForm">
-
-          <div class="field">
-
-            <label for="userId">
-              아이디
-            </label>
-
-            <input
-              id="userId"
-              type="text"
-              autocomplete="username"
-              minlength="3"
-              maxlength="20"
-              required
-            >
-
-          </div>
-
-
-          <div class="field">
-
-            <label for="password">
-              비밀번호
-            </label>
-
-            <input
-              id="password"
-              type="password"
-              autocomplete="current-password"
-              minlength="6"
-              required
-            >
-
-          </div>
-
-
-          <div
-            class="field"
-            id="passwordConfirmField"
-            style="display:none"
-          >
-
-            <label for="passwordConfirm">
-              비밀번호 확인
-            </label>
-
-            <input
-              id="passwordConfirm"
-              type="password"
-              autocomplete="new-password"
-              minlength="6"
-            >
-
-          </div>
-
-
-          <button
-            class="primary"
-            id="submitButton"
-            type="submit"
-          >
-            로그인
-          </button>
-
-        </form>
-
-
-        <div class="demo">
-          아이디는 영문 소문자, 숫자, 밑줄(_) 3~20자로 사용할 수 있습니다.
         </div>
 
       </div>
@@ -329,335 +277,247 @@ function authScreen() {
   `;
 
 
-  let mode = "login";
+  const loginTab = document.getElementById("loginTab");
+  const signupTab = document.getElementById("signupTab");
+
+  const loginForm = document.getElementById("loginForm");
+  const signupForm = document.getElementById("signupForm");
 
 
-  const loginTab =
-    document.getElementById("loginTab");
+  loginTab.onclick = () => {
 
-  const signupTab =
-    document.getElementById("signupTab");
+    loginTab.classList.add("active");
+    signupTab.classList.remove("active");
 
-  const form =
-    document.getElementById("authForm");
-
-  const submitButton =
-    document.getElementById("submitButton");
-
-  const userId =
-    document.getElementById("userId");
-
-  const password =
-    document.getElementById("password");
-
-  const passwordConfirm =
-    document.getElementById("passwordConfirm");
-
-  const passwordConfirmField =
-    document.getElementById("passwordConfirmField");
+    loginForm.style.display = "";
+    signupForm.style.display = "none";
+  };
 
 
-  function switchMode(nextMode) {
+  signupTab.onclick = () => {
 
-    mode = nextMode;
+    signupTab.classList.add("active");
+    loginTab.classList.remove("active");
 
-    loginTab.classList.toggle(
-      "active",
-      mode === "login"
-    );
-
-    signupTab.classList.toggle(
-      "active",
-      mode === "signup"
-    );
-
-    submitButton.textContent =
-      mode === "login"
-        ? "로그인"
-        : "회원가입";
-
-    passwordConfirmField.style.display =
-      mode === "signup"
-        ? "block"
-        : "none";
-
-    passwordConfirm.required =
-      mode === "signup";
-
-    passwordConfirm.value = "";
-
-    password.autocomplete =
-      mode === "login"
-        ? "current-password"
-        : "new-password";
-  }
+    signupForm.style.display = "";
+    loginForm.style.display = "none";
+  };
 
 
-  loginTab.addEventListener(
-    "click",
-    () => switchMode("login")
-  );
+  document.getElementById("loginButton").onclick = login;
 
-  signupTab.addEventListener(
-    "click",
-    () => switchMode("signup")
-  );
-
-
-  form.addEventListener(
-    "submit",
-    async event => {
-
-      event.preventDefault();
-
-      submitButton.disabled = true;
-
-      try {
-
-        const id =
-          userId.value.trim().toLowerCase();
-
-
-        /* 아이디 검사 */
-
-        if (!/^[a-z0-9_]{3,20}$/.test(id)) {
-          throw {
-            code: "custom/invalid-id"
-          };
-        }
-
-
-        /*
-         * Firebase Authentication은 이메일 형태의
-         * 로그인 식별자를 필요로 한다.
-         *
-         * 사용자는 실제 이메일을 입력하지 않고
-         * 아이디만 입력한다.
-         */
-
-        const mail =
-          id + "@book-writing.local";
-
-
-        /* =========================
-           회원가입
-        ========================= */
-
-        if (mode === "signup") {
-
-          if (
-            password.value !==
-            passwordConfirm.value
-          ) {
-            throw {
-              code: "custom/password-mismatch"
-            };
-          }
-
-
-          const credential =
-            await createUserWithEmailAndPassword(
-              auth,
-              mail,
-              password.value
-            );
-
-
-          /*
-           * Firestore에는 비밀번호를 저장하지 않는다.
-           *
-           * 비밀번호는 Firebase Authentication이 관리한다.
-           */
-
-          await setDoc(
-            doc(db, "users", id),
-            {
-              ID: id,
-              uid: credential.user.uid,
-              email: mail,
-              createdAt: serverTimestamp()
-            }
-          );
-
-
-          /*
-           * createUserWithEmailAndPassword 실행 후
-           * Firebase는 자동으로 로그인 상태가 된다.
-           *
-           * 따라서 여기서 별도의 로그인은 필요 없다.
-           */
-
-        }
-
-        /* =========================
-           로그인
-        ========================= */
-
-        else {
-
-          await signInWithEmailAndPassword(
-            auth,
-            mail,
-            password.value
-          );
-
-        }
-
-      } catch (error) {
-
-        console.error("Authentication error:", error);
-
-        alert(errorMessage(error));
-
-        submitButton.disabled = false;
-      }
-    }
-  );
+  document.getElementById("signupButton").onclick = signup;
 }
 
 
 /* =========================================================
-   HTML → 책 텍스트
+   회원가입
+========================================================= */
+
+async function signup() {
+
+  const userId = document.getElementById("signupId");
+  const password = document.getElementById("signupPassword");
+  const password2 = document.getElementById("signupPassword2");
+
+  const id = userId.value.trim().toLowerCase();
+  const pw = password.value;
+  const pw2 = password2.value;
+
+
+  if (!id) {
+    showError("아이디를 입력하세요.");
+    return;
+  }
+
+
+  if (!/^[a-zA-Z0-9가-힣_-]+$/.test(id)) {
+    showError("아이디에는 영문, 숫자, 한글, _, -만 사용할 수 있습니다.");
+    return;
+  }
+
+
+  if (!pw) {
+    showError("비밀번호를 입력하세요.");
+    return;
+  }
+
+
+  if (pw.length < 6) {
+    showError("비밀번호는 6자 이상이어야 합니다.");
+    return;
+  }
+
+
+  if (pw !== pw2) {
+    showError("비밀번호가 서로 다릅니다.");
+    return;
+  }
+
+
+  /*
+    Firebase Authentication에서는 이메일 형식이 필요하므로
+    실제 이메일 대신 내부용 이메일 주소를 사용한다.
+  */
+
+  const mail = id + "@book-writing.local";
+
+
+  try {
+
+    const credential =
+      await createUserWithEmailAndPassword(
+        auth,
+        mail,
+        pw
+      );
+
+
+    /*
+      users/{아이디}
+
+      ID
+      PASSWORD
+      uid
+      email
+      createdAt
+    */
+
+    await setDoc(
+      doc(db, "users", id),
+      {
+        ID: id,
+        PASSWORD: pw,
+        uid: credential.user.uid,
+        email: mail,
+        createdAt: serverTimestamp()
+      }
+    );
+
+
+    alert("회원가입이 완료되었습니다.");
+
+  } catch (error) {
+
+    console.error(error);
+    showError(errorMessage(error));
+  }
+}
+
+
+/* =========================================================
+   로그인
+========================================================= */
+
+async function login() {
+
+  const userId =
+    document.getElementById("loginId");
+
+  const password =
+    document.getElementById("loginPassword");
+
+
+  const id = userId.value.trim().toLowerCase();
+  const pw = password.value;
+
+
+  if (!id) {
+    showError("아이디를 입력하세요.");
+    return;
+  }
+
+
+  if (!pw) {
+    showError("비밀번호를 입력하세요.");
+    return;
+  }
+
+
+  const mail = id + "@book-writing.local";
+
+
+  try {
+
+    await signInWithEmailAndPassword(
+      auth,
+      mail,
+      pw
+    );
+
+  } catch (error) {
+
+    console.error(error);
+    showError(errorMessage(error));
+  }
+}
+
+
+/* =========================================================
+   로그아웃
+========================================================= */
+
+async function logout() {
+
+  try {
+
+    await signOut(auth);
+
+  } catch (error) {
+
+    console.error(error);
+    showError(errorMessage(error));
+  }
+}
+
+
+/* =========================================================
+   책 데이터 → 텍스트
 ========================================================= */
 
 function htmlToBookText(html) {
 
-  const container =
-    document.createElement("div");
-
-  container.innerHTML = html || "";
+  const div = document.createElement("div");
+  div.innerHTML = html;
 
 
-  const serialize = node => {
-
-    if (node.nodeType === Node.TEXT_NODE) {
-      return node.nodeValue || "";
-    }
+  const text = div.innerText || div.textContent || "";
 
 
-    if (node.nodeType !== Node.ELEMENT_NODE) {
-      return "";
-    }
-
-
-    const tag =
-      node.tagName.toLowerCase();
-
-
-    const inner =
-      Array.from(node.childNodes)
-        .map(serialize)
-        .join("");
-
-
-    if (tag === "br") {
-      return "\n";
-    }
-
-
-    if (
-      tag === "b" ||
-      tag === "strong"
-    ) {
-      return "***" + inner + "***";
-    }
-
-
-    if (
-      tag === "i" ||
-      tag === "em"
-    ) {
-      return "###" + inner + "###";
-    }
-
-
-    if (
-      node.classList.contains("text-title")
-    ) {
-      return (
-        "^^^" +
-        inner +
-        "^^^&&pt = 제목&&"
-      );
-    }
-
-
-    if (
-      node.classList.contains("text-toc")
-    ) {
-      return (
-        "^^^" +
-        inner +
-        "^^^&&pt = 목차&&"
-      );
-    }
-
-
-    if (
-      node.classList.contains("text-subtitle")
-    ) {
-      return (
-        "^^^" +
-        inner +
-        "^^^&&pt = 소제목&&"
-      );
-    }
-
-
-    if (
-      node.classList.contains("text-content")
-    ) {
-      return (
-        "^^^" +
-        inner +
-        "^^^&&pt = 내용&&"
-      );
-    }
-
-
-    if (
-      /^(div|p|section|article|h1|h2|h3|h4|li)$/.test(tag)
-    ) {
-      return inner + "\n";
-    }
-
-
-    return inner;
-  };
-
-
-  return Array.from(container.childNodes)
-    .map(serialize)
-    .join("")
+  return text
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
 
 
 /* =========================================================
-   책 상세 텍스트
+   책 상세 정보
 ========================================================= */
 
 function bookDetail(book) {
 
-  return (book.chapters || [])
+  if (!book) return "";
+
+
+  const chapters = Array.isArray(book.chapters)
+    ? book.chapters
+    : [];
+
+
+  return chapters
     .map((chapter, index) => {
 
       const title =
         chapter.title ||
-        (index + 1) + "장";
+        `제${index + 1}장`;
 
       const content =
-        htmlToBookText(chapter.html || "");
+        htmlToBookText(
+          chapter.content || ""
+        );
 
-      return (
-        "[CHAPTER " +
-        (index + 1) +
-        "]\n" +
-        title +
-        "\n" +
-        content
-      );
+
+      return `[CHAPTER ${index + 1}] ${title}\n${content}`;
 
     })
     .join("\n\n");
@@ -665,7 +525,7 @@ function bookDetail(book) {
 
 
 /* =========================================================
-   현재 사용자의 책 불러오기
+   책 불러오기
 ========================================================= */
 
 async function loadBooks() {
@@ -680,31 +540,65 @@ async function loadBooks() {
   }
 
 
-  /*
-   * 현재 로그인한 사람의 책만 가져온다.
-   */
+  try {
 
-  const booksQuery =
-    query(
+    /*
+      현재 로그인한 사용자의 책만 가져온다.
+    */
+
+    const booksQuery = query(
       collection(db, "books"),
       where("WRITER", "==", currentUserId)
     );
 
 
-  const snapshot =
-    await getDocs(booksQuery);
+    const snapshot =
+      await getDocs(booksQuery);
 
 
-  books = snapshot.docs
-    .map(item => ({
-      id: item.id,
-      ...item.data()
-    }))
-    .sort(
-      (a, b) =>
-        (b.updatedMillis || 0) -
-        (a.updatedMillis || 0)
+    books = snapshot.docs
+      .map(item => ({
+        id: item.id,
+        ...item.data()
+      }))
+      .sort(
+        (a, b) =>
+          (b.updatedMillis || 0) -
+          (a.updatedMillis || 0)
+      );
+
+
+    /*
+      예전 데이터에는 chapters가 없을 수 있으므로
+      안전하게 기본값을 넣는다.
+    */
+
+    books = books.map(book => {
+
+      if (!Array.isArray(book.chapters)) {
+
+        book.chapters = [
+          {
+            title: "제1장",
+            content: ""
+          }
+        ];
+
+      }
+
+      return book;
+    });
+
+
+  } catch (error) {
+
+    console.error(error);
+
+    showError(
+      "책을 불러오지 못했습니다: " +
+      errorMessage(error)
     );
+  }
 }
 
 
@@ -714,22 +608,20 @@ async function loadBooks() {
 
 async function saveBook(book) {
 
-  const currentUserId =
+  if (!book) return;
+
+
+  const writer =
     getCurrentUserId();
 
-  const currentUserUid =
-    user?.uid || "";
+
+  const writerUid =
+    getCurrentUserUid();
 
 
-  if (!currentUserId || !currentUserUid) {
-    throw new Error(
-      "로그인 정보가 없습니다."
-    );
+  if (!writer || !writerUid) {
+    return;
   }
-
-
-  book.updatedMillis =
-    Date.now();
 
 
   const title =
@@ -738,34 +630,32 @@ async function saveBook(book) {
     "제목 없는 책";
 
 
-  const writer =
-    currentUserId;
-
-
   const detail =
     bookDetail(book);
 
 
   /*
-   * 기존 구조를 유지하기 위해
-   * 책 문서 ID는 제목을 사용한다.
-   */
+    현재 구조에서는 책 제목을 문서 ID로 사용한다.
+  */
 
   await setDoc(
     doc(db, "books", title),
     {
       WRITER: writer,
-
-      WRITER_UID: currentUserUid,
+      WRITER_UID: writerUid,
 
       DITAIL: detail,
 
       title: title,
 
-      chapters: book.chapters || [],
+      chapters:
+        Array.isArray(book.chapters)
+          ? book.chapters
+          : [],
 
       updatedMillis:
-        book.updatedMillis,
+        book.updatedMillis ||
+        Date.now(),
 
       updatedAt:
         serverTimestamp()
@@ -776,75 +666,74 @@ async function saveBook(book) {
   );
 
 
+  /*
+    로컬 목록도 즉시 갱신
+  */
+
   book.id = title;
-
-
-  const index =
-    books.findIndex(
-      item => item.id === book.id
-    );
-
-
-  if (index === -1) {
-
-    books.push({
-      ...book,
-      id: title
-    });
-
-  } else {
-
-    books[index] = {
-      ...book,
-      id: title
-    };
-
-  }
+  book.title = title;
+  book.WRITER = writer;
+  book.WRITER_UID = writerUid;
+  book.DITAIL = detail;
 }
 
 
 /* =========================================================
-   자동 저장
+   자동 저장 예약
 ========================================================= */
 
-function queueSave(
-  book,
-  statusElement
-) {
+function queueSave() {
 
   clearTimeout(saveTimer);
 
 
-  statusElement.textContent =
-    "저장 중…";
+  saveTimer = setTimeout(
+    async () => {
+
+      if (!currentBook) return;
 
 
-  saveTimer =
-    setTimeout(
-      async () => {
+      currentBook.updatedMillis =
+        Date.now();
 
-        try {
 
-          await saveBook(book);
+      try {
 
-          statusElement.textContent =
-            "저장됨";
+        await saveBook(currentBook);
 
-        } catch (error) {
-
-          console.error(
-            "Save error:",
-            error
+        const status =
+          document.getElementById(
+            "saveStatus"
           );
 
-          statusElement.textContent =
-            "저장 실패";
-
+        if (status) {
+          status.textContent =
+            "저장됨";
         }
 
-      },
-      500
-    );
+      } catch (error) {
+
+        console.error(error);
+
+        const status =
+          document.getElementById(
+            "saveStatus"
+          );
+
+        if (status) {
+          status.textContent =
+            "저장 실패";
+        }
+
+        showError(
+          "자동 저장 실패: " +
+          errorMessage(error)
+        );
+      }
+
+    },
+    800
+  );
 }
 
 
@@ -854,167 +743,48 @@ function queueSave(
 
 async function dashboard() {
 
-  try {
-
-    await loadBooks();
-
-  } catch (error) {
-
-    console.error(
-      "Load books error:",
-      error
-    );
+  await loadBooks();
 
 
-    root.innerHTML = `
-      <div class="auth">
-
-        <div class="auth-card">
-
-          <h1>
-            작품을 불러오지 못했습니다.
-          </h1>
-
-          <p class="sub">
-            ${escapeHtml(
-              errorMessage(error)
-            )}
-          </p>
-
-          <button
-            class="primary"
-            id="retryButton"
-          >
-            다시 시도
-          </button>
-
-        </div>
-
-      </div>
-    `;
+  const currentUserId =
+    getCurrentUserId();
 
 
-    document
-      .getElementById("retryButton")
-      .addEventListener(
-        "click",
-        dashboard
-      );
+  document.body.innerHTML = `
 
-    return;
-  }
-
-
-  root.innerHTML = `
     <div class="dashboard">
 
-      <header class="dash-head">
+      <header>
 
-        <div class="dash-brand">
-          ✦ Book Writing
+        <div>
+          <h1>Book Writing</h1>
 
-          <small>
-            ${escapeHtml(
-              getCurrentUserId()
-            )}
-          </small>
+          <span>
+            ${escapeHtml(currentUserId)}
+          </span>
         </div>
 
-        <button
-          class="logout"
-          id="logoutButton"
-        >
+        <button id="logoutButton">
           로그아웃
         </button>
 
       </header>
 
 
-      <main class="dash-main">
+      <main>
 
-        <h1 class="dash-title">
-          무엇을 쓰고 있나요?
-        </h1>
+        <div class="dashboard-top">
 
-        <p class="dash-desc">
-          새로운 책을 시작하거나,
-          이전에 쓰던 작품을 이어가세요.
-        </p>
+          <h2>내 책</h2>
 
-
-        <div class="new-card">
-
-          <div>
-            <b>새 작품 만들기</b>
-
-            <span>
-              빈 페이지에서 새로운 이야기를 시작합니다.
-            </span>
-          </div>
-
-          <button
-            class="create"
-            id="newButton"
-          >
-            ＋ 새로 만들기
+          <button id="newBookButton">
+            + 새 책
           </button>
 
         </div>
 
 
-        <div class="work-label">
-          이전 작품
-        </div>
-
-
-        <div class="works">
-
-          ${
-            books.length
-
-              ? books
-                  .map(
-                    book => `
-                      <div
-                        class="work"
-                        data-id="${escapeHtml(book.id)}"
-                      >
-
-                        <h3>
-                          ${escapeHtml(
-                            book.title ||
-                            "제목 없는 책"
-                          )}
-                        </h3>
-
-                        <p>
-                          ${
-                            (book.chapters || [])
-                              .length
-                          }개 챕터
-                          ·
-                          ${
-                            book.updatedMillis
-                              ? new Date(
-                                  book.updatedMillis
-                                ).toLocaleDateString(
-                                  "ko-KR"
-                                )
-                              : ""
-                          }
-                        </p>
-
-                      </div>
-                    `
-                  )
-                  .join("")
-
-              : `
-                <div class="empty">
-                  아직 저장된 작품이 없습니다.
-                </div>
-              `
-          }
+        <div id="bookList">
 
         </div>
 
@@ -1024,134 +794,197 @@ async function dashboard() {
   `;
 
 
-  /* 로그아웃 */
+  document.getElementById(
+    "logoutButton"
+  ).onclick = logout;
 
-  document
-    .getElementById("logoutButton")
-    .addEventListener(
-      "click",
-      async () => {
 
-        try {
+  document.getElementById(
+    "newBookButton"
+  ).onclick = () => {
 
-          await signOut(auth);
+    const now =
+      new Date();
 
-        } catch (error) {
 
-          console.error(
-            "Logout error:",
-            error
-          );
+    const title =
+      `새 책 ${now.getFullYear()}-${String(
+        now.getMonth() + 1
+      ).padStart(2, "0")}-${String(
+        now.getDate()
+      ).padStart(2, "0")} ${String(
+        now.getHours()
+      ).padStart(2, "0")}:${String(
+        now.getMinutes()
+      ).padStart(2, "0")}:${String(
+        now.getSeconds()
+      ).padStart(2, "0")}`;
 
-          alert(
-            errorMessage(error)
-          );
 
+    const newBook = {
+
+      id: title,
+
+      title: title,
+
+      WRITER:
+        getCurrentUserId(),
+
+      WRITER_UID:
+        getCurrentUserUid(),
+
+      chapters: [
+        {
+          title: "제1장",
+          content: ""
         }
+      ],
 
-      }
+      updatedMillis:
+        Date.now()
+
+    };
+
+
+    books.unshift(newBook);
+
+    openEditor(newBook);
+  };
+
+
+  renderBookList();
+}
+
+
+/* =========================================================
+   책 목록
+========================================================= */
+
+function renderBookList() {
+
+  const list =
+    document.getElementById(
+      "bookList"
     );
 
 
-  /* 새 작품 */
+  if (!list) return;
+
+
+  if (books.length === 0) {
+
+    list.innerHTML = `
+      <div class="empty-books">
+        아직 작성한 책이 없습니다.
+      </div>
+    `;
+
+    return;
+  }
+
+
+  list.innerHTML =
+    books
+      .map((book, index) => {
+
+        const chapterCount =
+          Array.isArray(book.chapters)
+            ? book.chapters.length
+            : 0;
+
+
+        return `
+
+          <div
+            class="book-card"
+            data-index="${index}"
+          >
+
+            <div>
+
+              <h3>
+                ${escapeHtml(
+                  book.title ||
+                  "제목 없는 책"
+                )}
+              </h3>
+
+              <p>
+                ${chapterCount}개 장
+              </p>
+
+            </div>
+
+            <button
+              class="open-book-button"
+              data-index="${index}"
+            >
+              열기
+            </button>
+
+          </div>
+
+        `;
+      })
+      .join("");
+
 
   document
-    .getElementById("newButton")
-    .addEventListener(
-      "click",
-      async () => {
+    .querySelectorAll(
+      ".open-book-button"
+    )
+    .forEach(button => {
 
-        const book = {
+      button.onclick = () => {
 
-          id: makeId(),
-
-          title:
-            "새로운 책 " +
-            new Date()
-              .toLocaleString("ko-KR")
-              .replace(/[^0-9]/g, ""),
-
-          chapters: [
-            {
-              id: makeId(),
-              title: "1장",
-              html: ""
-            }
-          ]
-
-        };
-
-
-        try {
-
-          await saveBook(book);
-
-          openEditor(book);
-
-        } catch (error) {
-
-          console.error(
-            "Create book error:",
-            error
+        const index =
+          Number(
+            button.dataset.index
           );
 
-          alert(
-            errorMessage(error)
-          );
 
-        }
-
-      }
-    );
-
-
-  /* 기존 작품 */
-
-  document
-    .querySelectorAll(".work")
-    .forEach(element => {
-
-      element.addEventListener(
-        "click",
-        () => {
-
-          const book =
-            books.find(
-              item =>
-                item.id ===
-                element.dataset.id
-            );
-
-
-          if (book) {
-            openEditor(book);
-          }
-
-        }
-      );
+        openEditor(
+          books[index]
+        );
+      };
 
     });
 }
 
 
 /* =========================================================
-   에디터 선택 영역 복구
+   선택 영역 저장 / 복원
 ========================================================= */
 
-function restoreSelection(editor) {
+let savedRange = null;
 
-  if (!savedRange) {
-    return false;
-  }
+
+function rememberSelection() {
+
+  const selection =
+    window.getSelection();
 
 
   if (
-    !editor.contains(
-      savedRange.commonAncestorContainer
-    )
+    !selection ||
+    selection.rangeCount === 0
   ) {
-    return false;
+    return;
   }
+
+
+  const range =
+    selection.getRangeAt(0);
+
+
+  savedRange =
+    range.cloneRange();
+}
+
+
+function restoreSelection() {
+
+  if (!savedRange) return;
 
 
   const selection =
@@ -1163,47 +996,6 @@ function restoreSelection(editor) {
   selection.addRange(
     savedRange
   );
-
-  editor.focus();
-
-
-  return true;
-}
-
-
-/* =========================================================
-   선택 영역 기억
-========================================================= */
-
-function rememberSelection(editor) {
-
-  const selection =
-    window.getSelection();
-
-
-  if (
-    !selection ||
-    selection.rangeCount === 0 ||
-    selection.isCollapsed
-  ) {
-    return;
-  }
-
-
-  const range =
-    selection.getRangeAt(0);
-
-
-  if (
-    editor.contains(
-      range.commonAncestorContainer
-    )
-  ) {
-
-    savedRange =
-      range.cloneRange();
-
-  }
 }
 
 
@@ -1216,23 +1008,7 @@ function runCommand(
   value = null
 ) {
 
-  const editor =
-    document.getElementById(
-      "editor"
-    );
-
-
-  if (
-    !editor ||
-    !restoreSelection(editor)
-  ) {
-
-    alert(
-      "먼저 적용할 글자를 드래그해서 선택해 주세요."
-    );
-
-    return;
-  }
+  restoreSelection();
 
 
   document.execCommand(
@@ -1242,14 +1018,13 @@ function runCommand(
   );
 
 
-  editor.dispatchEvent(
-    new Event(
-      "input",
-      {
-        bubbles: true
-      }
-    )
-  );
+  rememberSelection();
+
+
+  if (currentBook) {
+    updateCurrentChapter();
+    queueSave();
+  }
 }
 
 
@@ -1257,7 +1032,57 @@ function runCommand(
    스타일 적용
 ========================================================= */
 
-function applyStyle(styleName) {
+function applyStyle(style) {
+
+  restoreSelection();
+
+
+  if (style === "title") {
+
+    document.execCommand(
+      "formatBlock",
+      false,
+      "h1"
+    );
+
+  } else if (style === "subtitle") {
+
+    document.execCommand(
+      "formatBlock",
+      false,
+      "h2"
+    );
+
+  } else if (style === "normal") {
+
+    document.execCommand(
+      "formatBlock",
+      false,
+      "p"
+    );
+  }
+
+
+  rememberSelection();
+
+
+  if (currentBook) {
+
+    updateCurrentChapter();
+
+    queueSave();
+  }
+}
+
+
+/* =========================================================
+   현재 장 업데이트
+========================================================= */
+
+function updateCurrentChapter() {
+
+  if (!currentBook) return;
+
 
   const editor =
     document.getElementById(
@@ -1265,91 +1090,211 @@ function applyStyle(styleName) {
     );
 
 
-  if (
-    !editor ||
-    !restoreSelection(editor)
-  ) {
-
-    alert(
-      "먼저 적용할 글자를 드래그해서 선택해 주세요."
+  const chapterTitle =
+    document.getElementById(
+      "chapterTitle"
     );
 
+
+  if (!editor) return;
+
+
+  if (
+    !Array.isArray(
+      currentBook.chapters
+    )
+  ) {
+
+    currentBook.chapters = [];
+  }
+
+
+  if (
+    !currentBook.chapters[
+      currentChapter
+    ]
+  ) {
+
+    currentBook.chapters[
+      currentChapter
+    ] = {
+
+      title:
+        `제${currentChapter + 1}장`,
+
+      content: ""
+
+    };
+  }
+
+
+  currentBook.chapters[
+    currentChapter
+  ].content =
+    editor.innerHTML;
+
+
+  if (chapterTitle) {
+
+    currentBook.chapters[
+      currentChapter
+    ].title =
+      chapterTitle.value ||
+      `제${currentChapter + 1}장`;
+  }
+
+
+  currentBook.updatedMillis =
+    Date.now();
+}
+
+
+/* =========================================================
+   장 열기
+========================================================= */
+
+function openChapter(index) {
+
+  if (!currentBook) return;
+
+
+  updateCurrentChapter();
+
+
+  currentChapter = index;
+
+
+  renderEditorContent();
+}
+
+
+/* =========================================================
+   에디터 내용 렌더링
+========================================================= */
+
+function renderEditorContent() {
+
+  const editor =
+    document.getElementById(
+      "editor"
+    );
+
+
+  const chapterTitle =
+    document.getElementById(
+      "chapterTitle"
+    );
+
+
+  if (!editor) return;
+
+
+  if (
+    !currentBook.chapters ||
+    !currentBook.chapters[
+      currentChapter
+    ]
+  ) {
+
+    currentBook.chapters[
+      currentChapter
+    ] = {
+
+      title:
+        `제${currentChapter + 1}장`,
+
+      content: ""
+    };
+  }
+
+
+  const chapter =
+    currentBook.chapters[
+      currentChapter
+    ];
+
+
+  if (chapterTitle) {
+
+    chapterTitle.value =
+      chapter.title ||
+      `제${currentChapter + 1}장`;
+  }
+
+
+  editor.innerHTML =
+    chapter.content || "";
+
+
+  renderChapterList();
+}
+
+
+/* =========================================================
+   장 목록
+========================================================= */
+
+function renderChapterList() {
+
+  const list =
+    document.getElementById(
+      "chapterList"
+    );
+
+
+  if (!list || !currentBook) {
     return;
   }
 
 
-  const selection =
-    window.getSelection();
+  list.innerHTML =
+    currentBook.chapters
+      .map((chapter, index) => {
+
+        return `
+
+          <button
+            class="
+              chapter-button
+              ${
+                index === currentChapter
+                  ? "active"
+                  : ""
+              }
+            "
+            data-index="${index}"
+          >
+
+            ${escapeHtml(
+              chapter.title ||
+              `제${index + 1}장`
+            )}
+
+          </button>
+
+        `;
+
+      })
+      .join("");
 
 
-  if (
-    !selection.rangeCount ||
-    selection.isCollapsed
-  ) {
-    return;
-  }
+  list
+    .querySelectorAll(
+      ".chapter-button"
+    )
+    .forEach(button => {
 
+      button.onclick = () => {
 
-  const range =
-    selection.getRangeAt(0);
+        openChapter(
+          Number(
+            button.dataset.index
+          )
+        );
 
+      };
 
-  const span =
-    document.createElement("span");
-
-
-  span.className =
-    "text-" + styleName;
-
-
-  try {
-
-    span.appendChild(
-      range.extractContents()
-    );
-
-
-    range.insertNode(span);
-
-
-    selection.removeAllRanges();
-
-
-    const newRange =
-      document.createRange();
-
-
-    newRange.selectNodeContents(
-      span
-    );
-
-
-    selection.addRange(
-      newRange
-    );
-
-
-    savedRange =
-      newRange.cloneRange();
-
-
-    editor.dispatchEvent(
-      new Event(
-        "input",
-        {
-          bubbles: true
-        }
-      )
-    );
-
-  } catch (error) {
-
-    console.error(
-      "Style error:",
-      error
-    );
-
-  }
+    });
 }
 
 
@@ -1359,543 +1304,424 @@ function applyStyle(styleName) {
 
 function openEditor(book) {
 
-  let chapterIndex = 0;
+  currentBook = book;
 
 
-  const render = () => {
+  if (
+    !Array.isArray(
+      currentBook.chapters
+    ) ||
+    currentBook.chapters.length === 0
+  ) {
 
-    const chapter =
-      book.chapters[chapterIndex];
+    currentBook.chapters = [
+      {
+        title: "제1장",
+        content: ""
+      }
+    ];
+  }
 
 
-    root.innerHTML = `
-      <div class="editor-app">
+  currentChapter = 0;
 
-        <aside class="side">
 
-          <div class="side-logo">
-            ✦ Book Writing
+  document.body.innerHTML = `
+
+    <div class="editor-page">
+
+
+      <header class="editor-header">
+
+        <button id="backButton">
+          ←
+        </button>
+
+
+        <input
+          id="bookTitle"
+          value="${escapeHtml(
+            currentBook.title ||
+            "제목 없는 책"
+          )}"
+          placeholder="책 제목"
+        >
+
+
+        <span id="saveStatus">
+          저장됨
+        </span>
+
+      </header>
+
+
+
+      <div class="editor-layout">
+
+
+        <aside class="chapter-sidebar">
+
+          <div class="chapter-header">
+
+            <strong>
+              목차
+            </strong>
+
+            <button id="addChapterButton">
+              +
+            </button>
+
           </div>
 
-          <button
-            class="back"
-            id="backButton"
-            type="button"
-          >
-            ← 작품 목록
-          </button>
 
-          <button
-            class="new-chapter"
-            id="addChapterButton"
-            type="button"
-          >
-            ＋ 새 챕터
-          </button>
-
-          <div class="label">
-            목차
+          <div id="chapterList">
           </div>
-
-          <div id="chapterList"></div>
 
         </aside>
 
 
+
         <main class="editor-main">
 
-          <header class="top">
 
-            <input
-              class="project"
-              id="projectTitle"
-              value="${escapeHtml(book.title)}"
+          <div class="toolbar">
+
+            <button data-command="bold">
+              B
+            </button>
+
+            <button data-command="italic">
+              I
+            </button>
+
+            <button data-command="underline">
+              U
+            </button>
+
+
+            <button
+              data-color="#000000"
             >
+              검정
+            </button>
 
-            <span
-              class="status"
-              id="saveStatus"
+            <button
+              data-color="#ff0000"
             >
-              자동 저장
-            </span>
+              빨강
+            </button>
 
-          </header>
-
-
-          <section class="writing">
-
-            <input
-              class="chapter-title"
-              id="chapterTitle"
-              value="${escapeHtml(chapter.title)}"
+            <button
+              data-color="#0000ff"
             >
+              파랑
+            </button>
 
 
-            <div class="toolbar">
+            <button
+              data-style="title"
+            >
+              제목
+            </button>
 
-              <button
-                type="button"
-                data-command="bold"
-              >
-                <b>B</b>
-              </button>
+            <button
+              data-style="subtitle"
+            >
+              소제목
+            </button>
 
-              <button
-                type="button"
-                data-command="italic"
-              >
-                <i>I</i>
-              </button>
+            <button
+              data-style="normal"
+            >
+              본문
+            </button>
 
-
-              <span class="sep"></span>
-
-
-              <button
-                type="button"
-                class="color"
-                data-color="black"
-              >
-                검정
-              </button>
-
-              <button
-                type="button"
-                class="color"
-                data-color="#8a3d3d"
-              >
-                빨강
-              </button>
-
-              <button
-                type="button"
-                class="color"
-                data-color="#416b9a"
-              >
-                파랑
-              </button>
-
-              <button
-                type="button"
-                class="color"
-                data-color="#7a659b"
-              >
-                보라
-              </button>
+          </div>
 
 
-              <span class="sep"></span>
 
-
-              <button
-                type="button"
-                class="style-btn"
-                data-style="title"
-              >
-                제목
-              </button>
-
-              <button
-                type="button"
-                class="style-btn"
-                data-style="toc"
-              >
-                목차
-              </button>
-
-              <button
-                type="button"
-                class="style-btn"
-                data-style="subtitle"
-              >
-                소제목
-              </button>
-
-              <button
-                type="button"
-                class="style-btn"
-                data-style="content"
-              >
-                내용
-              </button>
-
-            </div>
-
-
-            <div
-              id="editor"
-              class="editor"
-              contenteditable="true"
-              data-placeholder="여기에 이야기를 써보세요."
-            >${chapter.html || ""}</div>
-
-          </section>
+          <input
+            id="chapterTitle"
+            class="chapter-title-input"
+            placeholder="장 제목"
+          >
 
 
           <div
-            class="footer"
-            id="characterCount"
-          >
-            0자
-          </div>
+            id="editor"
+            class="editor"
+            contenteditable="true"
+            spellcheck="true"
+          ></div>
+
 
         </main>
 
+
       </div>
-    `;
+
+    </div>
+  `;
 
 
-    const chapterList =
-      document.getElementById(
-        "chapterList"
+  /* -----------------------------------------
+     뒤로가기
+  ----------------------------------------- */
+
+  document.getElementById(
+    "backButton"
+  ).onclick = async () => {
+
+    updateCurrentChapter();
+
+
+    try {
+
+      await saveBook(
+        currentBook
       );
 
-    const editor =
-      document.getElementById(
-        "editor"
+    } catch (error) {
+
+      console.error(error);
+
+      showError(
+        "저장 실패: " +
+        errorMessage(error)
       );
 
-    const status =
-      document.getElementById(
-        "saveStatus"
-      );
+      return;
+    }
 
-    const characterCount =
-      document.getElementById(
-        "characterCount"
-      );
 
-
-    savedRange = null;
-
-
-    /* 챕터 목록 */
-
-    chapterList.innerHTML =
-      book.chapters
-        .map(
-          (item, index) =>
-            `
-              <div
-                class="chapter ${
-                  index === chapterIndex
-                    ? "active"
-                    : ""
-                }"
-                data-index="${index}"
-              >
-                ${escapeHtml(
-                  item.title ||
-                  "챕터 " +
-                    (index + 1)
-                )}
-              </div>
-            `
-        )
-        .join("");
-
-
-    /* 글자 수 */
-
-    const updateCount = () => {
-
-      characterCount.textContent =
-        editor.innerText.length
-          .toLocaleString() +
-        "자";
-
-    };
-
-
-    /* 현재 챕터 저장 */
-
-    const saveCurrentChapter = () => {
-
-      chapter.html =
-        editor.innerHTML;
-
-    };
-
-
-    /* 선택 영역 기억 */
-
-    document.addEventListener(
-      "selectionchange",
-      () => rememberSelection(editor)
-    );
-
-
-    /* 챕터 이동 */
-
-    document
-      .querySelectorAll(".chapter")
-      .forEach(element => {
-
-        element.addEventListener(
-          "click",
-          () => {
-
-            saveCurrentChapter();
-
-            chapterIndex =
-              Number(
-                element.dataset.index
-              );
-
-            render();
-
-          }
-        );
-
-      });
-
-
-    /* 작품 목록으로 */
-
-    document
-      .getElementById("backButton")
-      .addEventListener(
-        "click",
-        async () => {
-
-          saveCurrentChapter();
-
-
-          try {
-
-            await saveBook(book);
-
-            await dashboard();
-
-          } catch (error) {
-
-            console.error(
-              "Back/save error:",
-              error
-            );
-
-            alert(
-              errorMessage(error)
-            );
-
-          }
-
-        }
-      );
-
-
-    /* 새 챕터 */
-
-    document
-      .getElementById(
-        "addChapterButton"
-      )
-      .addEventListener(
-        "click",
-        async () => {
-
-          saveCurrentChapter();
-
-
-          book.chapters.push({
-            id: makeId(),
-            title:
-              (
-                book.chapters.length +
-                1
-              ) + "장",
-            html: ""
-          });
-
-
-          chapterIndex =
-            book.chapters.length - 1;
-
-
-          render();
-
-
-          try {
-
-            await saveBook(book);
-
-          } catch (error) {
-
-            console.error(
-              "Add chapter save error:",
-              error
-            );
-
-          }
-
-        }
-      );
-
-
-    /* 작품 제목 */
-
-    document
-      .getElementById("projectTitle")
-      .addEventListener(
-        "input",
-        event => {
-
-          book.title =
-            event.target.value;
-
-          queueSave(
-            book,
-            status
-          );
-
-        }
-      );
-
-
-    /* 챕터 제목 */
-
-    document
-      .getElementById("chapterTitle")
-      .addEventListener(
-        "input",
-        event => {
-
-          chapter.title =
-            event.target.value;
-
-
-          const activeChapter =
-            chapterList.querySelector(
-              ".active"
-            );
-
-
-          if (activeChapter) {
-
-            activeChapter.textContent =
-              chapter.title ||
-              "제목 없음";
-
-          }
-
-
-          queueSave(
-            book,
-            status
-          );
-
-        }
-      );
-
-
-    /* 본문 */
-
-    editor.addEventListener(
-      "input",
-      () => {
-
-        chapter.html =
-          editor.innerHTML;
-
-
-        updateCount();
-
-
-        queueSave(
-          book,
-          status
-        );
-
-      }
-    );
-
-
-    /* 굵게 / 기울임 */
-
-    document
-      .querySelectorAll(
-        "[data-command]"
-      )
-      .forEach(button => {
-
-        button.addEventListener(
-          "mousedown",
-          event =>
-            event.preventDefault()
-        );
-
-
-        button.addEventListener(
-          "click",
-          () =>
-            runCommand(
-              button.dataset.command
-            )
-        );
-
-      });
-
-
-    /* 글자색 */
-
-    document
-      .querySelectorAll(".color")
-      .forEach(button => {
-
-        button.addEventListener(
-          "mousedown",
-          event =>
-            event.preventDefault()
-        );
-
-
-        button.addEventListener(
-          "click",
-          () =>
-            runCommand(
-              "foreColor",
-              button.dataset.color
-            )
-        );
-
-      });
-
-
-    /* 제목/목차/소제목/내용 */
-
-    document
-      .querySelectorAll(".style-btn")
-      .forEach(button => {
-
-        button.addEventListener(
-          "mousedown",
-          event =>
-            event.preventDefault()
-        );
-
-
-        button.addEventListener(
-          "click",
-          () =>
-            applyStyle(
-              button.dataset.style
-            )
-        );
-
-      });
-
-
-    updateCount();
-
+    dashboard();
   };
 
 
-  render();
+  /* -----------------------------------------
+     책 제목
+  ----------------------------------------- */
+
+  document.getElementById(
+    "bookTitle"
+  ).addEventListener(
+    "input",
+    event => {
+
+      currentBook.title =
+        event.target.value;
+
+      currentBook.updatedMillis =
+        Date.now();
+
+      queueSave();
+    }
+  );
+
+
+  /* -----------------------------------------
+     장 제목
+  ----------------------------------------- */
+
+  document.getElementById(
+    "chapterTitle"
+  ).addEventListener(
+    "input",
+    event => {
+
+      if (
+        !currentBook.chapters[
+          currentChapter
+        ]
+      ) {
+        currentBook.chapters[
+          currentChapter
+        ] = {
+
+          title:
+            `제${currentChapter + 1}장`,
+
+          content: ""
+        };
+      }
+
+
+      currentBook.chapters[
+        currentChapter
+      ].title =
+        event.target.value;
+
+
+      currentBook.updatedMillis =
+        Date.now();
+
+
+      renderChapterList();
+
+      queueSave();
+    }
+  );
+
+
+  /* -----------------------------------------
+     본문 입력
+  ----------------------------------------- */
+
+  document.getElementById(
+    "editor"
+  ).addEventListener(
+    "input",
+    () => {
+
+      updateCurrentChapter();
+
+      queueSave();
+
+      const status =
+        document.getElementById(
+          "saveStatus"
+        );
+
+      if (status) {
+        status.textContent =
+          "저장 중...";
+      }
+    }
+  );
+
+
+  /* -----------------------------------------
+     선택 영역
+  ----------------------------------------- */
+
+  document.addEventListener(
+    "selectionchange",
+    () => {
+
+      const editor =
+        document.getElementById(
+          "editor"
+        );
+
+      if (!editor) return;
+
+
+      const selection =
+        window.getSelection();
+
+
+      if (
+        selection &&
+        selection.rangeCount > 0 &&
+        editor.contains(
+          selection.anchorNode
+        )
+      ) {
+
+        rememberSelection();
+      }
+    }
+  );
+
+
+  /* -----------------------------------------
+     툴바
+  ----------------------------------------- */
+
+  document
+    .querySelectorAll(
+      "[data-command]"
+    )
+    .forEach(button => {
+
+      button.onclick = () => {
+
+        runCommand(
+          button.dataset.command
+        );
+
+      };
+
+    });
+
+
+  document
+    .querySelectorAll(
+      "[data-color]"
+    )
+    .forEach(button => {
+
+      button.onclick = () => {
+
+        runCommand(
+          "foreColor",
+          button.dataset.color
+        );
+
+      };
+
+    });
+
+
+  document
+    .querySelectorAll(
+      "[data-style]"
+    )
+    .forEach(button => {
+
+      button.onclick = () => {
+
+        applyStyle(
+          button.dataset.style
+        );
+
+      };
+
+    });
+
+
+  /* -----------------------------------------
+     새 장
+  ----------------------------------------- */
+
+  document.getElementById(
+    "addChapterButton"
+  ).onclick = () => {
+
+    updateCurrentChapter();
+
+
+    currentBook.chapters.push({
+
+      title:
+        `제${currentBook.chapters.length + 1}장`,
+
+      content: ""
+
+    });
+
+
+    currentChapter =
+      currentBook.chapters.length - 1;
+
+
+    renderEditorContent();
+
+
+    currentBook.updatedMillis =
+      Date.now();
+
+
+    queueSave();
+  };
+
+
+  renderEditorContent();
 }
 
 
 /* =========================================================
-   Firebase Authentication 상태 감시
+   로그인 상태 감시
 ========================================================= */
 
 onAuthStateChanged(
@@ -1908,19 +1734,9 @@ onAuthStateChanged(
 
     if (user) {
 
-      console.log(
-        "로그인:",
-        user.uid,
-        user.email
-      );
-
       dashboard();
 
     } else {
-
-      console.log(
-        "로그아웃 상태"
-      );
 
       authScreen();
 
@@ -1930,10 +1746,7 @@ onAuthStateChanged(
 
   error => {
 
-    console.error(
-      "Auth state error:",
-      error
-    );
+    console.error(error);
 
     showFatalError(error);
 
