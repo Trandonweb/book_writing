@@ -1,13 +1,414 @@
-import{initializeApp}from"https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";import{getAuth,createUserWithEmailAndPassword,signInWithEmailAndPassword,signOut,onAuthStateChanged}from"https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";import{getFirestore,collection,doc,getDocs,setDoc,serverTimestamp}from"https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
-const firebaseConfig={apiKey:"AIzaSyDSE4JV1QTre_pntwdml0S2oCSCnU0wlK0",authDomain:"book-writing-7019c.firebaseapp.com",projectId:"book-writing-7019c",storageBucket:"book-writing-7019c.firebasestorage.app",messagingSenderId:"952056354183",appId:"1:952056354183:web:d74cd413322cc61d2daf22"};
-const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app),A=document.getElementById("app");let user=null,books=[],timer=null;
-const id=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8),esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])),em=e=>({"auth/email-already-in-use":"이미 가입된 이메일입니다.","auth/invalid-email":"이메일 형식이 올바르지 않습니다.","auth/weak-password":"비밀번호는 6자 이상이어야 합니다.","auth/invalid-credential":"이메일 또는 비밀번호가 올바르지 않습니다.","auth/network-request-failed":"네트워크 연결을 확인해 주세요."}[e?.code]||e?.message||"오류가 발생했습니다.");
-function authScreen(){A.innerHTML=`<div class="auth"><div class="auth-card"><div class="logo">✦ Book <span>Writing</span></div><h1>당신의 책을 시작하세요.</h1><p class="sub">아이디어를 문장으로, 문장을 한 권의 책으로.</p><div class="tabs"><button id="lt" class="active">로그인</button><button id="st">회원가입</button></div><form id="form"><div class="field"><label>이메일</label><input id="email" type="email" required></div><div class="field"><label>비밀번호</label><input id="pw" type="password" minlength="6" required></div><button class="primary" id="submit">로그인</button></form><div class="demo">Firebase 계정으로 저장됩니다.</div></div></div>`;let mode="login";const sw=m=>{mode=m;lt.classList.toggle("active",m==="login");st.classList.toggle("active",m==="signup");submit.textContent=m==="login"?"로그인":"회원가입"};lt.onclick=()=>sw("login");st.onclick=()=>sw("signup");form.onsubmit=async e=>{e.preventDefault();try{const x=email.value.trim().toLowerCase(),p=pw.value;if(mode==="signup")await createUserWithEmailAndPassword(auth,x,p);else await signInWithEmailAndPassword(auth,x,p)}catch(e){alert(em(e))}}}
-async function load(){const s=await getDocs(collection(db,"users",user.uid,"works"));books=s.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.updatedMillis||0)-(a.updatedMillis||0))}
-async function save(b){b.updatedMillis=Date.now();await setDoc(doc(db,"users",user.uid,"works",b.id),{title:b.title||"제목 없는 책",chapters:b.chapters||[],updatedMillis:b.updatedMillis,updatedAt:serverTimestamp()},{merge:true});const i=books.findIndex(x=>x.id===b.id);if(i<0)books.push(b);else books[i]=b}
-function queue(b,s){clearTimeout(timer);s.textContent="저장 중…";timer=setTimeout(async()=>{try{await save(b);s.textContent="저장됨"}catch(e){s.textContent="저장 실패";alert(em(e))}},500)}
-async function dash(){try{await load()}catch(e){A.innerHTML=`<div class="auth"><div class="auth-card"><h1>작품을 불러오지 못했습니다.</h1><p class="sub">${esc(em(e))}</p><button class="primary" id="retry">다시 시도</button></div></div>`;retry.onclick=dash;return}A.innerHTML=`<div class="dashboard"><header class="dash-head"><div class="dash-brand">✦ Book Writing<small>${esc(user.email)}</small></div><button class="logout" id="logout">로그아웃</button></header><main class="dash-main"><h1 class="dash-title">무엇을 쓰고 있나요?</h1><p class="dash-desc">새로운 책을 시작하거나, 이전에 쓰던 작품을 이어가세요.</p><div class="new-card"><div><b>새 작품 만들기</b><span>빈 페이지에서 새로운 이야기를 시작합니다.</span></div><button class="create" id="new">＋ 새로 만들기</button></div><div class="work-label">이전 작품</div><div class="works">${books.length?books.map(b=>`<div class="work" data-id="${esc(b.id)}"><h3>${esc(b.title||"제목 없는 책")}</h3><p>${(b.chapters||[]).length}개 챕터 · ${b.updatedMillis?new Date(b.updatedMillis).toLocaleDateString("ko-KR"):""}</p></div>`).join(""):'<div class="empty">아직 저장된 작품이 없습니다.</div>'}</div></main></div>`;logout.onclick=()=>signOut(auth);new.onclick=async()=>{const b={id:id(),title:"새로운 책",chapters:[{id:id(),title:"1장",html:""}]};await save(b);openEditor(b)};document.querySelectorAll(".work").forEach(x=>x.onclick=()=>openEditor(books.find(b=>b.id===x.dataset.id)))}
-function command(c,v=null){const e=document.getElementById("editor");e.focus();document.execCommand(c,false,v);e.dispatchEvent(new Event("input",{bubbles:true}))}
-function style(n){const e=document.getElementById("editor"),s=getSelection();e.focus();if(!s||s.rangeCount===0||s.isCollapsed||!e.contains(s.anchorNode)||!e.contains(s.focusNode)){alert("먼저 적용할 글자를 드래그해서 선택해 주세요.");return}const r=s.getRangeAt(0),sp=document.createElement("span");sp.className="text-"+n;try{sp.appendChild(r.extractContents());r.insertNode(sp);s.removeAllRanges();const nr=document.createRange();nr.selectNodeContents(sp);s.addRange(nr);e.dispatchEvent(new Event("input",{bubbles:true}))}catch(x){console.error(x)}}
-function openEditor(b){let ci=0;const render=()=>{const c=b.chapters[ci];A.innerHTML=`<div class="editor-app"><aside class="side"><div class="side-logo">✦ Book Writing</div><button class="back" id="back">← 작품 목록</button><button class="new-chapter" id="add">＋ 새 챕터</button><div class="label">목차</div><div id="chapters"></div></aside><main class="editor-main"><header class="top"><input class="project" id="project" value="${esc(b.title)}"><span class="status" id="status">자동 저장</span></header><section class="writing"><input class="chapter-title" id="ct" value="${esc(c.title)}"><div class="toolbar"><button data-cmd="bold"><b>B</b></button><button data-cmd="italic"><i>I</i></button><span class="sep"></span><button class="color" data-color="black">검정</button><button class="color" data-color="#8a3d3d">빨강</button><button class="color" data-color="#416b9a">파랑</button><button class="color" data-color="#7a659b">보라</button><span class="sep"></span><button class="style-btn" data-style="title">제목</button><button class="style-btn" data-style="toc">목차</button><button class="style-btn" data-style="subtitle">소제목</button><button class="style-btn" data-style="content">내용</button></div><div id="editor" class="editor" contenteditable="true" data-placeholder="여기에 이야기를 써보세요.">${c.html||""}</div></section><div class="footer" id="count">0자</div></main></div>`;chapters.innerHTML=b.chapters.map((x,i)=>`<div class="chapter ${i===ci?"active":""}" data-i="${i}">${esc(x.title||("챕터 "+(i+1)))}</div>`).join("");const e=document.getElementById("editor"),status=document.getElementById("status"),count=document.getElementById("count"),update=()=>count.textContent=e.innerText.length.toLocaleString()+"자";document.querySelectorAll(".chapter").forEach(x=>x.onclick=()=>{c.html=e.innerHTML;ci=+x.dataset.i;render()});back.onclick=async()=>{c.html=e.innerHTML;try{await save(b);dash()}catch(x){alert(em(x))}};add.onclick=async()=>{c.html=e.innerHTML;b.chapters.push({id:id(),title:(b.chapters.length+1)+"장",html:""});ci=b.chapters.length-1;render();await save(b)};project.oninput=x=>{b.title=x.target.value;queue(b,status)};ct.oninput=x=>{c.title=x.target.value;document.querySelectorAll(".chapter")[ci].textContent=c.title;queue(b,status)};e.oninput=()=>{c.html=e.innerHTML;update();queue(b,status)};document.querySelectorAll("[data-cmd]").forEach(x=>x.onclick=()=>command(x.dataset.cmd));document.querySelectorAll(".color").forEach(x=>x.onclick=()=>command("foreColor",x.dataset.color));document.querySelectorAll(".style-btn").forEach(x=>x.onclick=()=>style(x.dataset.style));update()};render()}
-onAuthStateChanged(auth,u=>{user=u;if(u)dash();else authScreen()});
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
+import {
+  getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
+  signOut, onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
+import {
+  getFirestore, collection, doc, getDocs, setDoc, serverTimestamp
+} from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDSE4JV1QTre_pntwdml0S2oCSCnU0wlK0",
+  authDomain: "book-writing-7019c.firebaseapp.com",
+  projectId: "book-writing-7019c",
+  storageBucket: "book-writing-7019c.firebasestorage.app",
+  messagingSenderId: "952056354183",
+  appId: "1:952056354183:web:d74cd413322cc61d2daf22"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const root = document.getElementById("app");
+
+let user = null;
+let books = [];
+let saveTimer = null;
+let savedRange = null;
+
+const makeId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, char => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[char]));
+}
+
+function errorMessage(error) {
+  const messages = {
+    "auth/email-already-in-use": "이미 가입된 이메일입니다.",
+    "auth/invalid-email": "이메일 형식이 올바르지 않습니다.",
+    "auth/weak-password": "비밀번호는 6자 이상이어야 합니다.",
+    "auth/invalid-credential": "이메일 또는 비밀번호가 올바르지 않습니다.",
+    "auth/network-request-failed": "네트워크 연결을 확인해 주세요."
+  };
+  return messages[error?.code] || error?.message || "오류가 발생했습니다.";
+}
+
+function showFatalError(error) {
+  root.innerHTML = `<div class="auth"><div class="auth-card">
+    <div class="logo">✦ Book <span>Writing</span></div>
+    <h1>페이지를 불러오지 못했습니다.</h1>
+    <p class="sub">${escapeHtml(errorMessage(error))}</p>
+    <button class="primary" id="reloadButton">새로고침</button>
+  </div></div>`;
+  document.getElementById("reloadButton")?.addEventListener("click", () => location.reload());
+}
+
+function authScreen() {
+  root.innerHTML = `<div class="auth">
+    <div class="auth-card">
+      <div class="logo">✦ Book <span>Writing</span></div>
+      <h1>당신의 책을 시작하세요.</h1>
+      <p class="sub">아이디어를 문장으로, 문장을 한 권의 책으로.</p>
+      <div class="tabs">
+        <button id="loginTab" class="active" type="button">로그인</button>
+        <button id="signupTab" type="button">회원가입</button>
+      </div>
+      <form id="authForm">
+        <div class="field"><label for="email">이메일</label><input id="email" type="email" required></div>
+        <div class="field"><label for="password">비밀번호</label><input id="password" type="password" minlength="6" required></div>
+        <button class="primary" id="submitButton" type="submit">로그인</button>
+      </form>
+      <div class="demo">Firebase 계정으로 저장됩니다.</div>
+    </div>
+  </div>`;
+
+  let mode = "login";
+  const loginTab = document.getElementById("loginTab");
+  const signupTab = document.getElementById("signupTab");
+  const form = document.getElementById("authForm");
+  const submitButton = document.getElementById("submitButton");
+  const email = document.getElementById("email");
+  const password = document.getElementById("password");
+
+  const switchMode = nextMode => {
+    mode = nextMode;
+    loginTab.classList.toggle("active", mode === "login");
+    signupTab.classList.toggle("active", mode === "signup");
+    submitButton.textContent = mode === "login" ? "로그인" : "회원가입";
+  };
+
+  loginTab.addEventListener("click", () => switchMode("login"));
+  signupTab.addEventListener("click", () => switchMode("signup"));
+
+  form.addEventListener("submit", async event => {
+    event.preventDefault();
+    submitButton.disabled = true;
+    try {
+      const mail = email.value.trim().toLowerCase();
+      if (mode === "signup") {
+        await createUserWithEmailAndPassword(auth, mail, password.value);
+      } else {
+        await signInWithEmailAndPassword(auth, mail, password.value);
+      }
+    } catch (error) {
+      alert(errorMessage(error));
+      submitButton.disabled = false;
+    }
+  });
+}
+
+async function loadBooks() {
+  const snapshot = await getDocs(collection(db, "users", user.uid, "works"));
+  books = snapshot.docs
+    .map(item => ({ id: item.id, ...item.data() }))
+    .sort((a, b) => (b.updatedMillis || 0) - (a.updatedMillis || 0));
+}
+
+async function saveBook(book) {
+  book.updatedMillis = Date.now();
+  await setDoc(
+    doc(db, "users", user.uid, "works", book.id),
+    {
+      title: book.title || "제목 없는 책",
+      chapters: book.chapters || [],
+      updatedMillis: book.updatedMillis,
+      updatedAt: serverTimestamp()
+    },
+    { merge: true }
+  );
+
+  const index = books.findIndex(item => item.id === book.id);
+  if (index === -1) books.push(book);
+  else books[index] = book;
+}
+
+function queueSave(book, statusElement) {
+  clearTimeout(saveTimer);
+  statusElement.textContent = "저장 중…";
+  saveTimer = setTimeout(async () => {
+    try {
+      await saveBook(book);
+      statusElement.textContent = "저장됨";
+    } catch (error) {
+      statusElement.textContent = "저장 실패";
+      console.error(error);
+    }
+  }, 500);
+}
+
+async function dashboard() {
+  try {
+    await loadBooks();
+  } catch (error) {
+    root.innerHTML = `<div class="auth"><div class="auth-card">
+      <h1>작품을 불러오지 못했습니다.</h1>
+      <p class="sub">${escapeHtml(errorMessage(error))}</p>
+      <button class="primary" id="retryButton">다시 시도</button>
+    </div></div>`;
+    document.getElementById("retryButton").addEventListener("click", dashboard);
+    return;
+  }
+
+  root.innerHTML = `<div class="dashboard">
+    <header class="dash-head">
+      <div class="dash-brand">✦ Book Writing<small>${escapeHtml(user.email)}</small></div>
+      <button class="logout" id="logoutButton">로그아웃</button>
+    </header>
+    <main class="dash-main">
+      <h1 class="dash-title">무엇을 쓰고 있나요?</h1>
+      <p class="dash-desc">새로운 책을 시작하거나, 이전에 쓰던 작품을 이어가세요.</p>
+      <div class="new-card">
+        <div><b>새 작품 만들기</b><span>빈 페이지에서 새로운 이야기를 시작합니다.</span></div>
+        <button class="create" id="newButton">＋ 새로 만들기</button>
+      </div>
+      <div class="work-label">이전 작품</div>
+      <div class="works">
+        ${books.length
+          ? books.map(book => `<div class="work" data-id="${escapeHtml(book.id)}">
+              <h3>${escapeHtml(book.title || "제목 없는 책")}</h3>
+              <p>${(book.chapters || []).length}개 챕터 · ${book.updatedMillis ? new Date(book.updatedMillis).toLocaleDateString("ko-KR") : ""}</p>
+            </div>`).join("")
+          : '<div class="empty">아직 저장된 작품이 없습니다.</div>'}
+      </div>
+    </main>
+  </div>`;
+
+  document.getElementById("logoutButton").addEventListener("click", () => signOut(auth));
+
+  document.getElementById("newButton").addEventListener("click", async () => {
+    const book = {
+      id: makeId(),
+      title: "새로운 책",
+      chapters: [{ id: makeId(), title: "1장", html: "" }]
+    };
+    try {
+      await saveBook(book);
+      openEditor(book);
+    } catch (error) {
+      alert(errorMessage(error));
+    }
+  });
+
+  document.querySelectorAll(".work").forEach(element => {
+    element.addEventListener("click", () => {
+      const book = books.find(item => item.id === element.dataset.id);
+      if (book) openEditor(book);
+    });
+  });
+}
+
+function restoreSelection(editor) {
+  if (!savedRange) return false;
+  if (!editor.contains(savedRange.commonAncestorContainer)) return false;
+
+  const selection = window.getSelection();
+  selection.removeAllRanges();
+  selection.addRange(savedRange);
+  editor.focus();
+  return true;
+}
+
+function rememberSelection(editor) {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return;
+  const range = selection.getRangeAt(0);
+  if (editor.contains(range.commonAncestorContainer)) {
+    savedRange = range.cloneRange();
+  }
+}
+
+function runCommand(command, value = null) {
+  const editor = document.getElementById("editor");
+  if (!editor || !restoreSelection(editor)) {
+    alert("먼저 적용할 글자를 드래그해서 선택해 주세요.");
+    return;
+  }
+  document.execCommand(command, false, value);
+  editor.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+function applyStyle(styleName) {
+  const editor = document.getElementById("editor");
+  if (!editor || !restoreSelection(editor)) {
+    alert("먼저 적용할 글자를 드래그해서 선택해 주세요.");
+    return;
+  }
+
+  const selection = window.getSelection();
+  if (!selection.rangeCount || selection.isCollapsed) return;
+
+  const range = selection.getRangeAt(0);
+  const span = document.createElement("span");
+  span.className = "text-" + styleName;
+
+  try {
+    span.appendChild(range.extractContents());
+    range.insertNode(span);
+
+    selection.removeAllRanges();
+    const newRange = document.createRange();
+    newRange.selectNodeContents(span);
+    selection.addRange(newRange);
+    savedRange = newRange.cloneRange();
+
+    editor.dispatchEvent(new Event("input", { bubbles: true }));
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+function openEditor(book) {
+  let chapterIndex = 0;
+
+  const render = () => {
+    const chapter = book.chapters[chapterIndex];
+
+    root.innerHTML = `<div class="editor-app">
+      <aside class="side">
+        <div class="side-logo">✦ Book Writing</div>
+        <button class="back" id="backButton" type="button">← 작품 목록</button>
+        <button class="new-chapter" id="addChapterButton" type="button">＋ 새 챕터</button>
+        <div class="label">목차</div>
+        <div id="chapterList"></div>
+      </aside>
+
+      <main class="editor-main">
+        <header class="top">
+          <input class="project" id="projectTitle" value="${escapeHtml(book.title)}">
+          <span class="status" id="saveStatus">자동 저장</span>
+        </header>
+
+        <section class="writing">
+          <input class="chapter-title" id="chapterTitle" value="${escapeHtml(chapter.title)}">
+
+          <div class="toolbar">
+            <button type="button" data-command="bold"><b>B</b></button>
+            <button type="button" data-command="italic"><i>I</i></button>
+            <span class="sep"></span>
+            <button type="button" class="color" data-color="black">검정</button>
+            <button type="button" class="color" data-color="#8a3d3d">빨강</button>
+            <button type="button" class="color" data-color="#416b9a">파랑</button>
+            <button type="button" class="color" data-color="#7a659b">보라</button>
+            <span class="sep"></span>
+            <button type="button" class="style-btn" data-style="title">제목</button>
+            <button type="button" class="style-btn" data-style="toc">목차</button>
+            <button type="button" class="style-btn" data-style="subtitle">소제목</button>
+            <button type="button" class="style-btn" data-style="content">내용</button>
+          </div>
+
+          <div id="editor" class="editor" contenteditable="true" data-placeholder="여기에 이야기를 써보세요.">${chapter.html || ""}</div>
+        </section>
+
+        <div class="footer" id="characterCount">0자</div>
+      </main>
+    </div>`;
+
+    const chapterList = document.getElementById("chapterList");
+    const editor = document.getElementById("editor");
+    const status = document.getElementById("saveStatus");
+    const characterCount = document.getElementById("characterCount");
+
+    savedRange = null;
+
+    chapterList.innerHTML = book.chapters.map((item, index) =>
+      `<div class="chapter ${index === chapterIndex ? "active" : ""}" data-index="${index}">
+        ${escapeHtml(item.title || "챕터 " + (index + 1))}
+      </div>`
+    ).join("");
+
+    const updateCount = () => {
+      characterCount.textContent = editor.innerText.length.toLocaleString() + "자";
+    };
+
+    const saveCurrentChapter = () => {
+      chapter.html = editor.innerHTML;
+    };
+
+    document.addEventListener("selectionchange", () => rememberSelection(editor), { once: false });
+
+    document.querySelectorAll(".chapter").forEach(element => {
+      element.addEventListener("click", () => {
+        saveCurrentChapter();
+        chapterIndex = Number(element.dataset.index);
+        render();
+      });
+    });
+
+    document.getElementById("backButton").addEventListener("click", async () => {
+      saveCurrentChapter();
+      try {
+        await saveBook(book);
+        dashboard();
+      } catch (error) {
+        alert(errorMessage(error));
+      }
+    });
+
+    document.getElementById("addChapterButton").addEventListener("click", async () => {
+      saveCurrentChapter();
+      book.chapters.push({
+        id: makeId(),
+        title: (book.chapters.length + 1) + "장",
+        html: ""
+      });
+      chapterIndex = book.chapters.length - 1;
+      render();
+      await saveBook(book);
+    });
+
+    document.getElementById("projectTitle").addEventListener("input", event => {
+      book.title = event.target.value;
+      queueSave(book, status);
+    });
+
+    document.getElementById("chapterTitle").addEventListener("input", event => {
+      chapter.title = event.target.value;
+      const activeChapter = chapterList.querySelector(".active");
+      if (activeChapter) activeChapter.textContent = chapter.title || "제목 없음";
+      queueSave(book, status);
+    });
+
+    editor.addEventListener("input", () => {
+      chapter.html = editor.innerHTML;
+      updateCount();
+      queueSave(book, status);
+    });
+
+    document.querySelectorAll("[data-command]").forEach(button => {
+      button.addEventListener("mousedown", event => event.preventDefault());
+      button.addEventListener("click", () => runCommand(button.dataset.command));
+    });
+
+    document.querySelectorAll(".color").forEach(button => {
+      button.addEventListener("mousedown", event => event.preventDefault());
+      button.addEventListener("click", () => runCommand("foreColor", button.dataset.color));
+    });
+
+    document.querySelectorAll(".style-btn").forEach(button => {
+      button.addEventListener("mousedown", event => event.preventDefault());
+      button.addEventListener("click", () => applyStyle(button.dataset.style));
+    });
+
+    updateCount();
+  };
+
+  render();
+}
+
+onAuthStateChanged(auth, nextUser => {
+  user = nextUser;
+  if (user) dashboard();
+  else authScreen();
+}, showFatalError);
