@@ -40,7 +40,9 @@ function errorMessage(error) {
     "auth/invalid-email": "이메일 형식이 올바르지 않습니다.",
     "auth/weak-password": "비밀번호는 6자 이상이어야 합니다.",
     "auth/invalid-credential": "이메일 또는 비밀번호가 올바르지 않습니다.",
-    "auth/network-request-failed": "네트워크 연결을 확인해 주세요."
+    "auth/network-request-failed": "네트워크 연결을 확인해 주세요.",
+    "custom/invalid-id": "아이디는 영문 소문자, 숫자, 밑줄(_)만 사용할 수 있고 3~20자로 입력해 주세요.",
+    "custom/password-mismatch": "비밀번호가 서로 일치하지 않습니다."
   };
   return messages[error?.code] || error?.message || "오류가 발생했습니다.";
 }
@@ -66,27 +68,36 @@ function authScreen() {
         <button id="signupTab" type="button">회원가입</button>
       </div>
       <form id="authForm">
-        <div class="field"><label for="email">이메일</label><input id="email" type="email" required></div>
-        <div class="field"><label for="password">비밀번호</label><input id="password" type="password" minlength="6" required></div>
+        <div class="field"><label for="userId">아이디</label><input id="userId" type="text" autocomplete="username" minlength="3" required></div>
+        <div class="field"><label for="password">비밀번호</label><input id="password" type="password" autocomplete="current-password" minlength="6" required></div>
+        <div class="field" id="passwordConfirmField"><label for="passwordConfirm">비밀번호 확인</label><input id="passwordConfirm" type="password" autocomplete="new-password" minlength="6" required></div>
         <button class="primary" id="submitButton" type="submit">로그인</button>
       </form>
-      <div class="demo">Firebase 계정으로 저장됩니다.</div>
+      <div class="demo">아이디는 영문 소문자, 숫자, 밑줄(_) 3~20자로 사용할 수 있습니다.</div>
     </div>
   </div>`;
 
   let mode = "login";
+  passwordConfirmField.style.display = "none";
+  passwordConfirm.required = false;
+
   const loginTab = document.getElementById("loginTab");
   const signupTab = document.getElementById("signupTab");
   const form = document.getElementById("authForm");
   const submitButton = document.getElementById("submitButton");
-  const email = document.getElementById("email");
+  const userId = document.getElementById("userId");
   const password = document.getElementById("password");
+  const passwordConfirm = document.getElementById("passwordConfirm");
+  const passwordConfirmField = document.getElementById("passwordConfirmField");
 
   const switchMode = nextMode => {
     mode = nextMode;
     loginTab.classList.toggle("active", mode === "login");
     signupTab.classList.toggle("active", mode === "signup");
     submitButton.textContent = mode === "login" ? "로그인" : "회원가입";
+    passwordConfirmField.style.display = mode === "signup" ? "block" : "none";
+    passwordConfirm.required = mode === "signup";
+    password.autocomplete = mode === "login" ? "current-password" : "new-password";
   };
 
   loginTab.addEventListener("click", () => switchMode("login"));
@@ -96,8 +107,19 @@ function authScreen() {
     event.preventDefault();
     submitButton.disabled = true;
     try {
-      const mail = email.value.trim().toLowerCase();
+      const id = userId.value.trim().toLowerCase();
+
+      if (!/^[a-z0-9_]{3,20}$/.test(id)) {
+        throw { code: "custom/invalid-id" };
+      }
+
+      // Firebase Email/Password 인증을 사용하지만 사용자에게는 이메일 대신 아이디만 받습니다.
+      const mail = id + "@book-writing.local";
+
       if (mode === "signup") {
+        if (password.value !== passwordConfirm.value) {
+          throw { code: "custom/password-mismatch" };
+        }
         await createUserWithEmailAndPassword(auth, mail, password.value);
       } else {
         await signInWithEmailAndPassword(auth, mail, password.value);
