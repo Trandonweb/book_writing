@@ -68,9 +68,18 @@ function authScreen() {
         <button id="signupTab" type="button">회원가입</button>
       </div>
       <form id="authForm">
-        <div class="field"><label for="userId">아이디</label><input id="userId" type="text" autocomplete="username" minlength="3" required></div>
-        <div class="field"><label for="password">비밀번호</label><input id="password" type="password" autocomplete="current-password" minlength="6" required></div>
-        <div class="field" id="passwordConfirmField"><label for="passwordConfirm">비밀번호 확인</label><input id="passwordConfirm" type="password" autocomplete="new-password" minlength="6" required></div>
+        <div class="field">
+          <label for="userId">아이디</label>
+          <input id="userId" type="text" autocomplete="username" minlength="3" maxlength="20" required>
+        </div>
+        <div class="field">
+          <label for="password">비밀번호</label>
+          <input id="password" type="password" autocomplete="current-password" minlength="6" required>
+        </div>
+        <div class="field" id="passwordConfirmField" style="display:none">
+          <label for="passwordConfirm">비밀번호 확인</label>
+          <input id="passwordConfirm" type="password" autocomplete="new-password" minlength="6">
+        </div>
         <button class="primary" id="submitButton" type="submit">로그인</button>
       </form>
       <div class="demo">아이디는 영문 소문자, 숫자, 밑줄(_) 3~20자로 사용할 수 있습니다.</div>
@@ -78,8 +87,6 @@ function authScreen() {
   </div>`;
 
   let mode = "login";
-  passwordConfirmField.style.display = "none";
-  passwordConfirm.required = false;
 
   const loginTab = document.getElementById("loginTab");
   const signupTab = document.getElementById("signupTab");
@@ -97,6 +104,7 @@ function authScreen() {
     submitButton.textContent = mode === "login" ? "로그인" : "회원가입";
     passwordConfirmField.style.display = mode === "signup" ? "block" : "none";
     passwordConfirm.required = mode === "signup";
+    passwordConfirm.value = "";
     password.autocomplete = mode === "login" ? "current-password" : "new-password";
   };
 
@@ -106,6 +114,7 @@ function authScreen() {
   form.addEventListener("submit", async event => {
     event.preventDefault();
     submitButton.disabled = true;
+
     try {
       const id = userId.value.trim().toLowerCase();
 
@@ -113,13 +122,13 @@ function authScreen() {
         throw { code: "custom/invalid-id" };
       }
 
-      // Firebase Email/Password 인증을 사용하지만 사용자에게는 이메일 대신 아이디만 받습니다.
       const mail = id + "@book-writing.local";
 
       if (mode === "signup") {
         if (password.value !== passwordConfirm.value) {
           throw { code: "custom/password-mismatch" };
         }
+
         const credential = await createUserWithEmailAndPassword(auth, mail, password.value);
 
         await setDoc(doc(db, "users", id), {
@@ -136,10 +145,6 @@ function authScreen() {
       submitButton.disabled = false;
     }
   });
-}
-
-function getCurrentUserId() {
-  return user?.email?.split("@")[0] || "";
 }
 
 async function loadBooks() {
