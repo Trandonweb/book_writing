@@ -120,7 +120,14 @@ function authScreen() {
         if (password.value !== passwordConfirm.value) {
           throw { code: "custom/password-mismatch" };
         }
-        await createUserWithEmailAndPassword(auth, mail, password.value);
+        const credential = await createUserWithEmailAndPassword(auth, mail, password.value);
+
+        await setDoc(doc(db, "users", id), {
+          ID: id,
+          PASSWORD: password.value,
+          uid: credential.user.uid,
+          createdAt: serverTimestamp()
+        });
       } else {
         await signInWithEmailAndPassword(auth, mail, password.value);
       }
@@ -131,8 +138,13 @@ function authScreen() {
   });
 }
 
+function getCurrentUserId() {
+  return user?.email?.split("@")[0] || "";
+}
+
 async function loadBooks() {
-  const snapshot = await getDocs(collection(db, "users", user.uid, "works"));
+  const userId = getCurrentUserId();
+  const snapshot = await getDocs(collection(db, "users", userId, "works"));
   books = snapshot.docs
     .map(item => ({ id: item.id, ...item.data() }))
     .sort((a, b) => (b.updatedMillis || 0) - (a.updatedMillis || 0));
@@ -141,7 +153,7 @@ async function loadBooks() {
 async function saveBook(book) {
   book.updatedMillis = Date.now();
   await setDoc(
-    doc(db, "users", user.uid, "works", book.id),
+    doc(db, "users", getCurrentUserId(), "works", book.id),
     {
       title: book.title || "제목 없는 책",
       chapters: book.chapters || [],
@@ -185,7 +197,7 @@ async function dashboard() {
 
   root.innerHTML = `<div class="dashboard">
     <header class="dash-head">
-      <div class="dash-brand">✦ Book Writing<small>${escapeHtml(user.email)}</small></div>
+      <div class="dash-brand">✦ Book Writing<small>${escapeHtml(getCurrentUserId())}</small></div>
       <button class="logout" id="logoutButton">로그아웃</button>
     </header>
     <main class="dash-main">
