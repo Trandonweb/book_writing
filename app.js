@@ -147,9 +147,61 @@ function authScreen() {
   });
 }
 
+function htmlToBookText(html) {
+  const container = document.createElement("div");
+  container.innerHTML = html || "";
+
+  const serialize = node => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      return node.nodeValue || "";
+    }
+
+    if (node.nodeType !== Node.ELEMENT_NODE) return "";
+
+    const tag = node.tagName.toLowerCase();
+    const inner = Array.from(node.childNodes).map(serialize).join("");
+
+    if (tag === "br") return "\n";
+    if (tag === "b" || tag === "strong") return "***" + inner + "***";
+    if (tag === "i" || tag === "em") return "###" + inner + "###";
+
+    if (node.classList.contains("text-title")) {
+      return "^^^" + inner + "^^^&&pt = 제목&&";
+    }
+    if (node.classList.contains("text-toc")) {
+      return "^^^" + inner + "^^^&&pt = 목차&&";
+    }
+    if (node.classList.contains("text-subtitle")) {
+      return "^^^" + inner + "^^^&&pt = 소제목&&";
+    }
+    if (node.classList.contains("text-content")) {
+      return "^^^" + inner + "^^^&&pt = 내용&&";
+    }
+
+    if (/^(div|p|section|article|h1|h2|h3|h4|li)$/.test(tag)) {
+      return inner + "\n";
+    }
+
+    return inner;
+  };
+
+  return Array.from(container.childNodes)
+    .map(serialize)
+    .join("")
+    .replace(/\\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function bookDetail(book) {
+  return (book.chapters || []).map((chapter, index) => {
+    const title = chapter.title || (index + 1) + "장";
+    const content = htmlToBookText(chapter.html || "");
+    return "[CHAPTER " + (index + 1) + "]\\n" + title + "\\n" + content;
+  }).join("\\n\\n");
+}
+
 async function loadBooks() {
-  const userId = getCurrentUserId();
-  const snapshot = await getDocs(collection(db, "users", userId, "works"));
+  const snapshot = await getDocs(collection(db, "books"));
   books = snapshot.docs
     .map(item => ({ id: item.id, ...item.data() }))
     .sort((a, b) => (b.updatedMillis || 0) - (a.updatedMillis || 0));
@@ -157,20 +209,26 @@ async function loadBooks() {
 
 async function saveBook(book) {
   book.updatedMillis = Date.now();
+
+  const title = (book.title || "제목 없는 책").trim() || "제목 없는 책";
+  const writer = getCurrentUserId();
+  const ditail = bookDetail(book);
+
   await setDoc(
-    doc(db, "users", getCurrentUserId(), "works", book.id),
+    doc(db, "books", title),
     {
-      title: book.title || "제목 없는 책",
-      chapters: book.chapters || [],
+      WRITER: writer,
+      DITAIL: ditail,
       updatedMillis: book.updatedMillis,
       updatedAt: serverTimestamp()
     },
     { merge: true }
   );
 
+  book.id = title;
   const index = books.findIndex(item => item.id === book.id);
-  if (index === -1) books.push(book);
-  else books[index] = book;
+  if (index === -1) books.push({ ...book, id: title });
+  else books[index] = { ...book, id: title };
 }
 
 function queueSave(book, statusElement) {
@@ -229,7 +287,7 @@ async function dashboard() {
   document.getElementById("newButton").addEventListener("click", async () => {
     const book = {
       id: makeId(),
-      title: "새로운 책",
+      title: "새로운 책 " + new Date().toLocaleString("ko-KR").replace(/[^0-9]/g, ""),
       chapters: [{ id: makeId(), title: "1장", html: "" }]
     };
     try {
