@@ -64,7 +64,9 @@ button{cursor:pointer}
 .editor-header{display:flex;align-items:center;gap:13px;padding:0 22px;border-bottom:1px solid var(--line);background:#fffdf9;z-index:5}
 #backButton{width:36px;height:36px;border:1px solid var(--line);background:#fff;border-radius:9px;font-size:18px}
 #bookTitle{flex:1;min-width:0;border:0;background:transparent;outline:0;font:600 17px "Noto Serif KR",serif}
-.editor-header-right{display:flex;align-items:center;gap:10px}
+.editor-header-right{display:flex;align-items:center;gap:7px}
+.header-tool-button{border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:8px;padding:7px 10px;font-size:11px}
+.header-tool-button:hover{background:#f3f0e9}
 #saveStatus{font-size:11px;color:var(--muted)}
 .danger-button{border:1px solid #e4c2c1;background:#fff8f7;color:var(--danger);border-radius:8px;padding:7px 10px;font-size:11px}
 .editor-layout{min-height:0;display:grid;grid-template-columns:225px 1fr}
@@ -80,6 +82,7 @@ button{cursor:pointer}
 .toolbar{position:sticky;top:0;z-index:3;width:min(850px,calc(100% - 70px));margin:0 auto 22px;display:flex;gap:3px;flex-wrap:wrap;background:#fffdf9ed;border:1px solid var(--line);padding:7px;border-radius:10px;backdrop-filter:blur(8px)}
 .toolbar button{height:31px;border:0;background:transparent;border-radius:6px;padding:0 9px;color:#49453d}
 .toolbar button:hover{background:#eeeae2}
+.toolbar-divider{width:1px;height:22px;background:var(--line);margin:4px 3px}
 .chapter-title-input,.editor{width:min(850px,calc(100% - 70px));margin-left:auto;margin-right:auto}
 .chapter-title-input{display:block;border:0;outline:0;background:transparent;font:700 34px "Noto Serif KR",serif;margin-bottom:18px}
 .editor{min-height:560px;outline:0;font:400 17px/1.95 "Noto Serif KR",serif}
@@ -92,6 +95,19 @@ button{cursor:pointer}
 .editor .text-toc{font-size:24px;font-weight:600;line-height:1.5}
 .editor .text-subtitle{font-size:21px;font-weight:600;line-height:1.6}
 .editor .text-content{font-size:17px;font-weight:400;line-height:1.95}
+.editor-stats{position:sticky;bottom:12px;width:min(850px,calc(100% - 70px));margin:24px auto 0;padding:8px 12px;border:1px solid var(--line);border-radius:9px;background:#fffdf9;display:flex;justify-content:flex-end;gap:15px;color:var(--muted);font-size:10px;box-shadow:0 5px 18px #00000008}
+.editor-stats b{color:var(--ink);font-weight:700}
+.modal-backdrop{position:fixed;inset:0;z-index:200;background:#29272166;display:grid;place-items:center;padding:20px;backdrop-filter:blur(4px)}
+.modal-card{width:min(620px,100%);max-height:90vh;overflow:auto;background:var(--paper);border:1px solid var(--line);border-radius:18px;box-shadow:0 25px 80px #0003;padding:22px}
+.modal-head{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px}
+.modal-head h3{font:700 24px "Noto Serif KR",serif;margin:0}
+.modal-close{border:0;background:#eeeae2;width:32px;height:32px;border-radius:8px;font-size:20px;color:var(--muted)}
+.history-list{display:grid;gap:8px}
+.history-item{display:flex;align-items:center;justify-content:space-between;gap:15px;border:1px solid var(--line);border-radius:10px;padding:12px 13px;background:#fff}
+.history-item strong{display:block;font-size:12px}
+.history-item span{display:block;color:var(--muted);font-size:10px;margin-top:4px}
+.restore-version-button{border:1px solid var(--line);background:#faf8f2;color:var(--ink);border-radius:7px;padding:7px 10px;font-size:10px;white-space:nowrap}
+.history-empty{text-align:center;padding:40px;color:var(--muted);font-size:12px}
 
 /* errors */
 .error-message{position:fixed;right:20px;bottom:20px;z-index:100;background:#2d2a25;color:#fff;padding:12px 15px;border-radius:10px;font-size:12px;box-shadow:0 12px 30px #0003;max-width:min(420px,calc(100% - 40px))}
@@ -108,6 +124,9 @@ button{cursor:pointer}
   .editor-header-right{gap:5px}
   #saveStatus{display:none}
   .danger-button{font-size:10px;padding:6px 8px}
+.header-tool-button{font-size:10px;padding:6px 7px}
+.editor-stats{width:calc(100% - 28px);gap:8px;justify-content:center;flex-wrap:wrap}
+.history-item{align-items:flex-start}
   .editor-layout{grid-template-columns:1fr}
   .chapter-sidebar{display:none}
   .toolbar,.chapter-title-input,.editor{width:calc(100% - 28px)}
