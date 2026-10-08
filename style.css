@@ -1,7 +1,116 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Noto+Serif+KR:wght@400;500;600;700&display=swap');
-:root{--bg:#f6f4ef;--paper:#fffdf9;--ink:#28251f;--muted:#8d887d;--line:#e3ded3;--accent:#8a7449}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:"DM Sans","Noto Sans KR",sans-serif}button,input{font:inherit}.auth{min-height:100vh;display:grid;place-items:center;padding:24px;background:radial-gradient(circle at 50% 10%,#fffdf8,#f1eee6 70%)}.auth-card{width:min(420px,100%);background:var(--paper);border:1px solid var(--line);border-radius:22px;padding:38px;box-shadow:0 25px 80px #403a2d20}.logo{font-weight:700;font-size:19px;margin-bottom:48px}.logo span{color:var(--accent)}.auth h1,.dash-title,.editor{font-family:"Noto Serif KR",serif}.auth h1{font-size:29px;margin:0 0 8px}.sub,.demo,.dash-desc{color:var(--muted);font-size:13px}.sub{margin-bottom:26px}.tabs{display:flex;background:#eeeae2;padding:4px;border-radius:9px;margin-bottom:20px}.tabs button{flex:1;border:0;background:none;padding:9px;border-radius:7px;color:var(--muted);cursor:pointer}.tabs .active{background:white;color:var(--ink);box-shadow:0 2px 7px #0001}.field{display:grid;gap:6px;margin:13px 0}.field label{font-size:12px;font-weight:600}.field input{border:1px solid var(--line);border-radius:9px;padding:12px;outline:0}.primary,.create{border:0;background:var(--ink);color:#fff;border-radius:9px;padding:12px 15px;cursor:pointer}.primary{width:100%;margin-top:7px}.demo{text-align:center;margin-top:13px;font-size:10px}.dashboard{min-height:100vh;padding:42px 7vw}.dash-head{max-width:1100px;margin:auto;display:flex;justify-content:space-between;align-items:end}.dash-brand{font-weight:700}.dash-brand small{display:block;color:var(--muted);font-size:11px;font-weight:400;margin-top:5px}.logout{border:1px solid var(--line);background:transparent;border-radius:8px;padding:8px 12px;cursor:pointer}.dash-main{max-width:1100px;margin:65px auto}.dash-title{font-size:37px;margin:0 0 8px}.dash-desc{margin-bottom:30px}.new-card{border:1px dashed #c8c0b0;background:#fbfaf6;border-radius:14px;padding:20px;display:flex;justify-content:space-between;align-items:center;margin-bottom:38px}.new-card span{display:block;color:var(--muted);font-size:12px;margin-top:5px}.work-label{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.08em;margin-bottom:12px}.works{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}.work{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:19px;cursor:pointer}.work:hover{box-shadow:0 10px 30px #0000000d;transform:translateY(-1px)}.work h3{font-family:"Noto Serif KR",serif;margin:0 0 10px}.work p{color:var(--muted);font-size:11px;margin:0}.empty{color:var(--muted);font-size:13px}.editor-app{height:100vh;display:grid;grid-template-columns:225px 1fr;overflow:hidden}.side{background:#28261f;color:#f5f1e8;padding:20px 14px;display:flex;flex-direction:column}.side-logo{font-weight:700;padding:5px 8px 23px}.side button{cursor:pointer}.back,.new-chapter{border-radius:8px;padding:9px}.back{border:1px solid #504d45;background:transparent;color:#d8d3c8;margin-bottom:10px}.new-chapter{border:0;background:#d8be78;color:#28261f;font-weight:600}.label{font-size:10px;color:#969188;letter-spacing:.12em;margin:26px 8px 8px}.chapter{padding:9px;border-radius:7px;color:#c9c4ba;font-size:13px;cursor:pointer}.chapter.active{background:#3b3932;color:white}.editor-main{min-width:0;display:flex;flex-direction:column;background:var(--paper)}.top{height:68px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;padding:0 28px}.project{border:0;background:transparent;outline:0;font-weight:700}.status{font-size:11px;color:var(--muted)}.writing{width:min(850px,calc(100% - 70px));margin:auto;flex:1;overflow:auto;padding:44px 0 70px}.chapter-title{width:100%;border:0;background:none;outline:0;font:600 35px "Noto Serif KR",serif;margin-bottom:16px}.toolbar{position:sticky;top:0;z-index:2;display:flex;gap:4px;flex-wrap:wrap;background:#fffdf9eF;border:1px solid var(--line);padding:7px;border-radius:9px;margin-bottom:20px;backdrop-filter:blur(7px)}.toolbar button,.toolbar select{height:31px;border:0;background:transparent;border-radius:6px;padding:0 8px;cursor:pointer;color:#49453d}.toolbar button:hover,.toolbar select:hover{background:#eeeae2}.sep{width:1px;background:var(--line);margin:3px}.editor{min-height:550px;outline:0;font-size:17px;line-height:1.95}.editor:empty:before{content:"여기에 이야기를 써보세요.";color:#aaa59a}.editor h1{font-size:34px;line-height:1.4}.editor h2{font-size:27px;line-height:1.5}.editor h3{font-size:21px;line-height:1.6}.editor p{font-size:17px}.footer{position:fixed;right:15px;bottom:12px;color:var(--muted);font-size:10px}@media(max-width:700px){.editor-app{grid-template-columns:1fr}.side{display:none}.writing{width:calc(100% - 28px);padding-top:25px}.top{padding:0 14px}.dash-main{margin-top:40px}.new-card{align-items:flex-start;gap:12px;flex-direction:column}}
-.editor .text-title{font-family:"Noto Serif KR",serif;font-size:34px;font-weight:700;line-height:1.4}
-.editor .text-toc{font-family:"Noto Serif KR",serif;font-size:24px;font-weight:600;line-height:1.5}
-.editor .text-subtitle{font-family:"Noto Serif KR",serif;font-size:21px;font-weight:600;line-height:1.6}
-.editor .text-content{font-family:"Noto Serif KR",serif;font-size:17px;font-weight:400;line-height:1.95}
+
+:root{
+  --bg:#f5f3ee;
+  --paper:#fffdf9;
+  --ink:#292721;
+  --muted:#8a857a;
+  --line:#e3ded3;
+  --accent:#8a7449;
+  --accent-soft:#efe8d8;
+  --danger:#b94a48;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"DM Sans","Noto Sans KR",sans-serif}
+button,input{font:inherit}
+button{cursor:pointer}
+
+/* auth */
+.auth-container{min-height:100vh;display:grid;place-items:center;padding:24px;background:radial-gradient(circle at 50% 10%,#fffdf8,#eeeae1 72%)}
+.auth-box{width:min(430px,100%);background:rgba(255,253,249,.94);border:1px solid var(--line);border-radius:24px;padding:42px;box-shadow:0 24px 70px #403a2d18}
+.auth-box h1{font:700 29px "Noto Serif KR",serif;margin:0 0 30px}
+.auth-tabs{display:flex;gap:4px;background:#eeeae2;padding:4px;border-radius:10px;margin-bottom:20px}
+.auth-tabs button{flex:1;border:0;background:transparent;color:var(--muted);padding:10px;border-radius:7px}
+.auth-tabs button.active{background:#fff;color:var(--ink);box-shadow:0 2px 8px #00000012}
+#loginForm,#signupForm{display:grid;gap:11px}
+.auth-box input{width:100%;border:1px solid var(--line);background:#fff;border-radius:10px;padding:13px;outline:none}
+.auth-box input:focus{border-color:#b9a77f;box-shadow:0 0 0 3px #8a744914}
+#loginButton,#signupButton{border:0;background:var(--ink);color:#fff;border-radius:10px;padding:13px;margin-top:3px;font-weight:600}
+
+/* dashboard */
+.dashboard{min-height:100vh}
+.dashboard-header{height:76px;border-bottom:1px solid var(--line);background:#fffdf9cc;backdrop-filter:blur(12px);display:flex;align-items:center;justify-content:space-between;padding:0 max(24px,6vw)}
+.brand{display:flex;align-items:center;gap:11px}
+.brand-mark{width:34px;height:34px;border-radius:10px;background:var(--ink);color:#fff;display:grid;place-items:center;font-weight:700}
+.brand h1{font-size:15px;margin:0}
+.brand span:not(.brand-mark){display:block;color:var(--muted);font-size:10px;margin-top:2px}
+.account{display:flex;align-items:center;gap:12px}
+.account-id{font-size:12px;color:var(--muted)}
+#logoutButton{border:1px solid var(--line);background:#fff;border-radius:9px;padding:8px 12px;color:var(--ink)}
+.dashboard-main{width:min(1100px,calc(100% - 40px));margin:0 auto;padding:70px 0}
+.dashboard-top{display:flex;justify-content:space-between;align-items:end;margin-bottom:32px}
+.eyebrow{font-size:10px;letter-spacing:.14em;font-weight:700;color:var(--accent);margin:0 0 6px}
+.dashboard-top h2{font:700 36px "Noto Serif KR",serif;margin:0}
+.dashboard-description{font-size:13px;color:var(--muted);margin:7px 0 0}
+.new-book-button{border:0;background:var(--ink);color:#fff;border-radius:10px;padding:12px 17px;font-weight:600;box-shadow:0 7px 20px #00000012}
+#bookList{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
+.book-card{position:relative;display:flex;flex-direction:column;background:var(--paper);border:1px solid var(--line);border-radius:16px;overflow:hidden;transition:.18s ease}
+.book-card:hover{transform:translateY(-2px);box-shadow:0 14px 35px #0000000d}
+.book-open{border:0;background:transparent;text-align:left;padding:0;display:flex;align-items:stretch;min-width:0}
+.book-cover{width:76px;min-height:130px;background:linear-gradient(150deg,#4b4437,#292721);color:#d8be78;display:flex;align-items:end;padding:12px;font-size:9px;letter-spacing:.12em;font-weight:700;flex:none}
+.book-info{padding:19px 15px;min-width:0}
+.book-info h3{font:600 19px "Noto Serif KR",serif;margin:0 0 9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.book-info p{font-size:11px;color:var(--muted);margin:0}
+.book-actions{display:flex;border-top:1px solid var(--line);padding:9px;gap:7px}
+.open-book-button,.delete-book-button{flex:1;border-radius:8px;padding:8px;border:1px solid var(--line);background:#fff;color:var(--ink)}
+.delete-book-button{color:var(--danger);border-color:#e7c7c6;background:#fffafa}
+.empty-books{grid-column:1/-1;text-align:center;padding:70px 20px;border:1px dashed #cfc7b7;border-radius:16px;background:#fbfaf6;color:var(--muted)}
+.empty-books strong{display:block;color:var(--ink);margin:12px 0 5px}
+.empty-books p{font-size:12px;margin:0}
+.empty-icon{margin:auto;width:42px;height:42px;border-radius:12px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;font-size:11px;font-weight:700}
+
+/* editor */
+.editor-page{height:100vh;display:grid;grid-template-rows:68px 1fr;overflow:hidden;background:var(--paper)}
+.editor-header{display:flex;align-items:center;gap:13px;padding:0 22px;border-bottom:1px solid var(--line);background:#fffdf9;z-index:5}
+#backButton{width:36px;height:36px;border:1px solid var(--line);background:#fff;border-radius:9px;font-size:18px}
+#bookTitle{flex:1;min-width:0;border:0;background:transparent;outline:0;font:600 17px "Noto Serif KR",serif}
+.editor-header-right{display:flex;align-items:center;gap:10px}
+#saveStatus{font-size:11px;color:var(--muted)}
+.danger-button{border:1px solid #e4c2c1;background:#fff8f7;color:var(--danger);border-radius:8px;padding:7px 10px;font-size:11px}
+.editor-layout{min-height:0;display:grid;grid-template-columns:225px 1fr}
+.chapter-sidebar{border-right:1px solid var(--line);background:#faf8f2;padding:18px 12px;overflow:auto}
+.chapter-header{display:flex;align-items:center;justify-content:space-between;padding:4px 7px 12px}
+.chapter-header strong{font-size:12px;letter-spacing:.06em}
+#addChapterButton{width:28px;height:28px;border:1px solid var(--line);background:#fff;border-radius:7px}
+#chapterList{display:grid;gap:3px}
+.chapter-button{border:0;background:transparent;text-align:left;padding:9px;border-radius:7px;color:#777166;font-size:12px}
+.chapter-button:hover{background:#eeeae2}
+.chapter-button.active{background:#e8e1d3;color:var(--ink);font-weight:600}
+.editor-main{min-width:0;overflow:auto;background:var(--paper);padding:30px 0 80px}
+.toolbar{position:sticky;top:0;z-index:3;width:min(850px,calc(100% - 70px));margin:0 auto 22px;display:flex;gap:3px;flex-wrap:wrap;background:#fffdf9ed;border:1px solid var(--line);padding:7px;border-radius:10px;backdrop-filter:blur(8px)}
+.toolbar button{height:31px;border:0;background:transparent;border-radius:6px;padding:0 9px;color:#49453d}
+.toolbar button:hover{background:#eeeae2}
+.chapter-title-input,.editor{width:min(850px,calc(100% - 70px));margin-left:auto;margin-right:auto}
+.chapter-title-input{display:block;border:0;outline:0;background:transparent;font:700 34px "Noto Serif KR",serif;margin-bottom:18px}
+.editor{min-height:560px;outline:0;font:400 17px/1.95 "Noto Serif KR",serif}
+.editor:empty:before{content:"여기에 이야기를 써보세요.";color:#aaa59a}
+.editor h1{font-size:34px;line-height:1.4}
+.editor h2{font-size:27px;line-height:1.5}
+.editor h3{font-size:21px;line-height:1.6}
+.editor p{font-size:17px}
+.editor .text-title{font-size:34px;font-weight:700;line-height:1.4}
+.editor .text-toc{font-size:24px;font-weight:600;line-height:1.5}
+.editor .text-subtitle{font-size:21px;font-weight:600;line-height:1.6}
+.editor .text-content{font-size:17px;font-weight:400;line-height:1.95}
+
+/* errors */
+.error-message{position:fixed;right:20px;bottom:20px;z-index:100;background:#2d2a25;color:#fff;padding:12px 15px;border-radius:10px;font-size:12px;box-shadow:0 12px 30px #0003;max-width:min(420px,calc(100% - 40px))}
+
+@media(max-width:700px){
+  .dashboard-header{padding:0 16px}
+  .account-id{display:none}
+  .dashboard-main{width:calc(100% - 28px);padding:45px 0}
+  .dashboard-top{align-items:flex-start;gap:18px}
+  .dashboard-top h2{font-size:29px}
+  .new-book-button{white-space:nowrap}
+  .editor-page{grid-template-rows:60px 1fr}
+  .editor-header{padding:0 10px}
+  .editor-header-right{gap:5px}
+  #saveStatus{display:none}
+  .danger-button{font-size:10px;padding:6px 8px}
+  .editor-layout{grid-template-columns:1fr}
+  .chapter-sidebar{display:none}
+  .toolbar,.chapter-title-input,.editor{width:calc(100% - 28px)}
+  .toolbar{margin-bottom:18px}
+  .chapter-title-input{font-size:28px}
+}
