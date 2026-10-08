@@ -7,6 +7,7 @@ import {
   getDoc,
   getDocs,
   setDoc,
+  deleteDoc,
   serverTimestamp,
   query,
   where
@@ -784,8 +785,8 @@ async function loadBooks() {
       snapshot.docs
         .map(
           item => ({
-            id: item.id,
-            ...item.data()
+            ...item.data(),
+            id: item.id
           })
         )
         .sort(
@@ -842,89 +843,40 @@ async function loadBooks() {
 
 async function saveBook(book) {
 
-  if (!book) {
-    return;
+  if (!book) return;
+
+  const writer = getCurrentUserId();
+  if (!writer) return;
+
+  // 문서 ID는 책 제목이 아니라 생성 시 발급한 고유 ID를 사용한다.
+  // 따라서 제목을 바꿔도 같은 Firestore 문서에 계속 저장된다.
+  if (!book.id) {
+    book.id =
+      (crypto.randomUUID ? crypto.randomUUID() : `book-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   }
-
-
-  const writer =
-    getCurrentUserId();
-
-
-  if (!writer) {
-    return;
-  }
-
 
   const title =
-    (
-      book.title ||
-      "제목 없는 책"
-    )
-      .trim() ||
-      "제목 없는 책";
+    (book.title || "제목 없는 책").trim() || "제목 없는 책";
 
-
-  const detail =
-    bookDetail(book);
-
-
-  /*
-    현재 구조에서는
-    책 제목을 문서 ID로 사용한다.
-  */
+  const detail = bookDetail(book);
 
   await setDoc(
-    doc(
-      db,
-      "books",
-      title
-    ),
+    doc(db, "books", book.id),
     {
-
-      WRITER:
-        writer,
-
-      DITAIL:
-        detail,
-
-      title:
-        title,
-
-      chapters:
-        Array.isArray(
-          book.chapters
-        )
-          ? book.chapters
-          : [],
-
-      updatedMillis:
-        book.updatedMillis ||
-        Date.now(),
-
-      updatedAt:
-        serverTimestamp()
-
+      WRITER: writer,
+      DITAIL: detail,
+      title,
+      chapters: Array.isArray(book.chapters) ? book.chapters : [],
+      updatedMillis: book.updatedMillis || Date.now(),
+      updatedAt: serverTimestamp()
     },
-    {
-      merge: true
-    }
+    { merge: true }
   );
 
-
-  book.id =
-    title;
-
-  book.title =
-    title;
-
-  book.WRITER =
-    writer;
-
-  book.DITAIL =
-    detail;
+  book.title = title;
+  book.WRITER = writer;
+  book.DITAIL = detail;
 }
-
 
 /* =========================================================
    자동 저장
@@ -1019,43 +971,33 @@ async function dashboard() {
 
     <div class="dashboard">
 
-      <header>
+      <header class="dashboard-header">
 
-        <div>
-
-          <h1>
-            Book Writing
-          </h1>
-
-          <span>
-            ${escapeHtml(id)}
-          </span>
-
+        <div class="brand">
+          <span class="brand-mark">B</span>
+          <div>
+            <h1>Book Writing</h1>
+            <span>나만의 책을 쓰는 공간</span>
+          </div>
         </div>
 
-
-        <button id="logoutButton">
-          로그아웃
-        </button>
+        <div class="account">
+          <span class="account-id">${escapeHtml(id)}</span>
+          <button id="logoutButton">로그아웃</button>
+        </div>
 
       </header>
 
-
-      <main>
+      <main class="dashboard-main">
 
         <div class="dashboard-top">
-
-          <h2>
-            내 책
-          </h2>
-
-
-          <button id="newBookButton">
-            + 새 책
-          </button>
-
+          <div>
+            <p class="eyebrow">LIBRARY</p>
+            <h2>내 책</h2>
+            <p class="dashboard-description">아이디어를 문장으로, 문장을 한 권의 책으로.</p>
+          </div>
+          <button id="newBookButton" class="new-book-button">+ 새 책</button>
         </div>
-
 
         <div id="bookList"></div>
 
@@ -1108,7 +1050,7 @@ function createNewBook() {
   const newBook = {
 
     id:
-      title,
+      (crypto.randomUUID ? crypto.randomUUID() : `book-${Date.now()}-${Math.random().toString(36).slice(2)}`),
 
     title:
       title,
@@ -1145,113 +1087,92 @@ function createNewBook() {
 }
 
 
+async function deleteBook(book) {
+
+  if (!book || !book.id) return;
+
+  const title =
+    (book.title || "제목 없는 책").trim() || "제목 없는 책";
+
+  const confirmed = confirm(
+    `"${title}"을(를) 삭제할까요?\\n\\n삭제하면 책과 모든 장의 내용이 영구적으로 삭제됩니다.`
+  );
+
+  if (!confirmed) return;
+
+  try {
+    await deleteDoc(doc(db, "books", book.id));
+
+    books = books.filter(item => item.id !== book.id);
+
+    if (currentBook && currentBook.id === book.id) {
+      currentBook = null;
+    }
+
+    dashboard();
+  } catch (error) {
+    showError("책 삭제 실패: " + errorMessage(error));
+  }
+}
+
+
 /* =========================================================
    책 목록
 ========================================================= */
 
 function renderBookList() {
 
-  const list =
-    document.getElementById(
-      "bookList"
-    );
-
-
-  if (!list) {
-    return;
-  }
-
+  const list = document.getElementById("bookList");
+  if (!list) return;
 
   if (books.length === 0) {
-
     list.innerHTML = `
-
       <div class="empty-books">
-        아직 작성한 책이 없습니다.
+        <div class="empty-icon">책</div>
+        <strong>아직 작성한 책이 없습니다.</strong>
+        <p>새 책을 만들어 첫 문장을 시작해 보세요.</p>
       </div>
-
     `;
-
     return;
   }
 
+  list.innerHTML = books.map((book, index) => {
+    const chapterCount = Array.isArray(book.chapters) ? book.chapters.length : 0;
+    const title = escapeHtml(book.title || "제목 없는 책");
+    const updated = book.updatedMillis
+      ? new Date(book.updatedMillis).toLocaleDateString("ko-KR")
+      : "";
 
-  list.innerHTML =
-    books
-      .map(
-        (book, index) => {
+    return `
+      <article class="book-card" data-index="${index}">
+        <button class="book-open" data-index="${index}" aria-label="${title} 열기">
+          <div class="book-cover">
+            <span>BOOK</span>
+          </div>
+          <div class="book-info">
+            <h3>${title}</h3>
+            <p>${chapterCount}개 장 · ${updated}</p>
+          </div>
+        </button>
+        <div class="book-actions">
+          <button class="open-book-button" data-index="${index}">열기</button>
+          <button class="delete-book-button" data-index="${index}">삭제</button>
+        </div>
+      </article>
+    `;
+  }).join("");
 
-          const chapterCount =
-            Array.isArray(
-              book.chapters
-            )
-              ? book.chapters.length
-              : 0;
+  list.querySelectorAll(".book-open, .open-book-button").forEach(button => {
+    button.onclick = () => openEditor(books[Number(button.dataset.index)]);
+  });
 
-
-          return `
-
-            <div
-              class="book-card"
-              data-index="${index}"
-            >
-
-              <div>
-
-                <h3>
-                  ${escapeHtml(
-                    book.title ||
-                    "제목 없는 책"
-                  )}
-                </h3>
-
-                <p>
-                  ${chapterCount}개 장
-                </p>
-
-              </div>
-
-
-              <button
-                class="open-book-button"
-                data-index="${index}"
-              >
-                열기
-              </button>
-
-            </div>
-
-          `;
-
-        }
-      )
-      .join("");
-
-
-  document
-    .querySelectorAll(
-      ".open-book-button"
-    )
-    .forEach(
-      button => {
-
-        button.onclick = () => {
-
-          const index =
-            Number(
-              button.dataset.index
-            );
-
-
-          openEditor(
-            books[index]
-          );
-        };
-
-      }
-    );
+  list.querySelectorAll(".delete-book-button").forEach(button => {
+    button.onclick = event => {
+      event.stopPropagation();
+      deleteBook(books[Number(button.dataset.index)]);
+    };
+  });
 }
-
 
 /* =========================================================
    선택 영역
@@ -1684,9 +1605,10 @@ function openEditor(book) {
         >
 
 
-        <span id="saveStatus">
-          저장됨
-        </span>
+        <div class="editor-header-right">
+          <span id="saveStatus">저장됨</span>
+          <button id="deleteCurrentBookButton" class="danger-button">책 삭제</button>
+        </div>
 
       </header>
 
@@ -1849,6 +1771,11 @@ function openEditor(book) {
 
       dashboard();
     };
+
+
+  document.getElementById("deleteCurrentBookButton").onclick = () => {
+    deleteBook(currentBook);
+  };
 
 
   /* -----------------------------------------
