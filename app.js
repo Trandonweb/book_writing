@@ -41,6 +41,8 @@ let currentBook = null;
 let currentChapter = 0;
 let saveTimer = null;
 let savedRange = null;
+let lastVersionSnapshot = "";
+let lastVersionAt = 0;
 
 
 /* =========================================================
@@ -878,6 +880,228 @@ async function saveBook(book) {
   book.DITAIL = detail;
 }
 
+
+/* =========================================================
+   추가 기능: 통계 / 버전 / 검색 / 내보내기
+========================================================= */
+
+function getBookStats(book) {
+  const chapters = Array.isArray(book?.chapters) ? book.chapters : [];
+  let all = "";
+  let current = "";
+  chapters.forEach((chapter, index) => {
+    const text = htmlToBookText(chapter?.content || "");
+    all += text + "\n";
+    if (index === currentChapter) current = text;
+  });
+  const count = text => ({
+    withSpaces: text.length,
+    withoutSpaces: text.replace(/\s/g, "").length,
+    sentences: (text.match(/[.!?。！？]+/g) || []).length
+  });
+  return { current: count(current), total: count(all.trim()) };
+}
+
+function updateStats() {
+  const box = document.getElementById("editorStats");
+  if (!box || !currentBook) return;
+  const s = getBookStats(currentBook);
+  box.innerHTML =
+    "<span>현재 장 <b>" + s.current.withoutSpaces.toLocaleString() + "</b>자</span>" +
+    "<span>전체 <b>" + s.total.withoutSpaces.toLocaleString() + "</b>자</span>" +
+    "<span>공백 포함 " + s.total.withSpaces.toLocaleString() + "</span>" +
+    "<span>문장 " + s.total.sentences.toLocaleString() + "</span>";
+}
+
+async function createVersionSnapshot(book) {
+  if (!book?.id) return;
+  const snapshot = JSON.stringify({title:book.title || "", chapters:book.chapters || []});
+  const now = Date.now();
+  if (snapshot === lastVersionSnapshot || now - lastVersionAt < 30000) return;
+  try {
+    await setDoc(doc(db, "books", book.id, "versions", String(now)), {
+      title: book.title || "제목 없는 책",
+      chapters: book.chapters || [],
+      savedMillis: now,
+      savedAt: serverTimestamp()
+    });
+    lastVersionSnapshot = snapshot;
+    lastVersionAt = now;
+  } catch (error) {
+    console.warn("버전 기록 실패:", error);
+  }
+}
+
+async function showVersionHistory() {
+  if (!currentBook?.id) return;
+  try {
+    const snapshot = await getDocs(collection(db, "books", currentBook.id, "versions"));
+    const versions = snapshot.docs.map(item => ({id:item.id, ...item.data()}))
+      .sort((a,b) => Number(b.savedMillis || b.id) - Number(a.savedMillis || a.id))
+      .slice(0,30);
+
+    const modal = document.createElement("div");
+    modal.className = "modal-backdrop";
+    modal.innerHTML =
+      '<div class="modal-card history-modal">' +
+      '<div class="modal-head"><div><p class="eyebrow">HISTORY</p><h3>버전 기록</h3></div><button class="modal-close">×</button></div>' +
+      '<div class="history-list">' +
+      (versions.length ? versions.map((v,i) => {
+        const date = new Date(Number(v.savedMillis || v.id));
+        const chars = getBookStats({chapters:v.chapters}).total.withoutSpaces;
+        return '<div class="history-item"><div><strong>' + escapeHtml(v.title || "제목 없는 책") +
+          '</strong><span>' + date.toLocaleString("ko-KR") + ' · ' + (v.chapters?.length || 0) +
+          '개 장 · ' + chars.toLocaleString() + '자</span></div><button class="restore-version-button" data-index="' + i + '">복구</button></div>';
+      }).join("") : '<div class="history-empty">아직 저장된 버전이 없습니다.</div>') +
+      '</div></div>';
+
+    document.body.appendChild(modal);
+    modal.querySelector(".modal-close").onclick = () => modal.remove();
+
+    modal.querySelectorAll(".restore-version-button").forEach(button => {
+      button.onclick = async () => {
+        const version = versions[Number(button.dataset.index)];
+        if (!version || !confirm("이 버전으로 복구할까요? 현재 내용은 먼저 저장됩니다.")) return;
+        updateCurrentChapter();
+        await saveBook(currentBook);
+        currentBook.title = version.title || currentBook.title;
+        currentBook.chapters = JSON.parse(JSON.stringify(version.chapters || []));
+        currentChapter = 0;
+        renderEditorContent();
+        updateStats();
+        queueSave();
+        modal.remove();
+      };
+    });
+  } catch (error) {
+    showError("버전 기록을 불러오지 못했습니다: " + errorMessage(error));
+  }
+}
+
+function replaceTextInNode(root, search, replacement) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const nodes = [];
+  let node;
+  while ((node = walker.nextNode())) nodes.push(node);
+  let count = 0;
+  nodes.forEach(n => {
+    if (!n.nodeValue.includes(search)) return;
+    const parts = n.nodeValue.split(search);
+    count += parts.length - 1;
+    n.nodeValue = parts.join(replacement);
+  });
+  return count;
+}
+
+function findText() {
+  const term = prompt("찾을 단어를 입력하세요.");
+  if (!term || !currentBook) return;
+  let count = 0;
+  currentBook.chapters.forEach(ch => {
+    count += htmlToBookText(ch.content || "").split(term).length - 1;
+  });
+  if (!count) return showError('"' + term + '"을(를) 찾지 못했습니다.');
+  const editor = document.getElementById("editor");
+  if (editor) {
+    const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT);
+    let node;
+    while ((node = walker.nextNode())) {
+      const index = node.nodeValue.indexOf(term);
+      if (index >= 0) {
+        const range = document.createRange();
+        range.setStart(node,index); range.setEnd(node,index + term.length);
+        const selection = window.getSelection();
+        selection.removeAllRanges(); selection.addRange(range);
+        editor.focus();
+        break;
+      }
+    }
+  }
+  alert('책 전체에서 "' + term + '"을(를) ' + count + '번 찾았습니다.');
+}
+
+function replaceInBook() {
+  const search = prompt("찾을 단어를 입력하세요.");
+  if (!search || !currentBook) return;
+  const replacement = prompt('"' + search + '"을(를) 무엇으로 바꿀까요?');
+  if (replacement === null) return;
+  let total = 0;
+  currentBook.chapters.forEach(ch => {
+    const holder = document.createElement("div");
+    holder.innerHTML = ch.content || "";
+    total += replaceTextInNode(holder, search, replacement);
+    ch.content = holder.innerHTML;
+  });
+  renderEditorContent();
+  updateStats();
+  currentBook.updatedMillis = Date.now();
+  queueSave();
+  alert(total + "곳을 바꿨습니다.");
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url; link.download = filename;
+  document.body.appendChild(link); link.click(); link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function exportPdf() {
+  if (!currentBook) return;
+  const w = window.open("", "_blank");
+  if (!w) return showError("팝업이 차단되어 PDF 내보내기를 열 수 없습니다.");
+  const chapters = currentBook.chapters || [];
+  w.document.write(
+    '<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>' +
+    escapeHtml(currentBook.title || "책") +
+    '</title><style>@page{size:A4;margin:22mm 20mm}body{font-family:"Noto Serif KR","Malgun Gothic",serif;line-height:1.9;color:#222}h1{text-align:center;font-size:30pt;margin:80px 0 100px}h2{font-size:20pt;margin-top:45px;page-break-before:always}.chapter:first-of-type h2{page-break-before:auto}.content{font-size:11.5pt}img{max-width:100%}</style></head><body>' +
+    '<h1>' + escapeHtml(currentBook.title || "제목 없는 책") + '</h1>' +
+    chapters.map((ch,i) => '<section class="chapter"><h2>' + escapeHtml(ch.title || ("제" + (i+1) + "장")) + '</h2><div class="content">' + (ch.content || "") + '</div></section>').join("") +
+    '</body></html>'
+  );
+  w.document.close(); w.focus();
+  setTimeout(() => w.print(), 500);
+}
+
+async function exportDocx() {
+  if (!currentBook) return;
+  try {
+    const { Document, Packer, Paragraph, TextRun } =
+      await import("https://cdn.jsdelivr.net/npm/docx@9.9.0/+esm");
+    const children = [
+      new Paragraph({children:[new TextRun({text:currentBook.title || "제목 없는 책",bold:true,size:36})]})
+    ];
+    (currentBook.chapters || []).forEach((ch,i) => {
+      children.push(new Paragraph({children:[new TextRun({text:ch.title || ("제" + (i+1) + "장"),bold:true,size:28})]}));
+      htmlToBookText(ch.content || "").split(/\n+/).forEach(line =>
+        children.push(new Paragraph({children:[new TextRun(line)]}))
+      );
+    });
+    const file = new Document({creator:getCurrentUserId(),title:currentBook.title || "Book Writing",sections:[{children}]});
+    downloadBlob(await Packer.toBlob(file), (currentBook.title || "책") + ".docx");
+  } catch (error) {
+    showError("Word 내보내기 실패: " + error.message);
+  }
+}
+
+async function exportHwp() {
+  if (!currentBook) return;
+  try {
+    const { htmlToHwpx } =
+      await import("https://cdn.jsdelivr.net/npm/@ssabrojs/hwpxjs@0.4.0/dist/browser/hwpxjs.browser.mjs");
+    const html =
+      "<h1>" + escapeHtml(currentBook.title || "제목 없는 책") + "</h1>" +
+      (currentBook.chapters || []).map((ch,i) =>
+        "<h2>" + escapeHtml(ch.title || ("제" + (i+1) + "장")) + "</h2>" + (ch.content || "")
+      ).join("");
+    const bytes = await htmlToHwpx(html);
+    downloadBlob(new Blob([bytes],{type:"application/zip"}),(currentBook.title || "책") + ".hwpx");
+  } catch (error) {
+    showError("한글 내보내기 실패: " + error.message);
+  }
+}
+
 /* =========================================================
    자동 저장
 ========================================================= */
@@ -907,6 +1131,8 @@ function queueSave() {
           await saveBook(
             currentBook
           );
+
+          await createVersionSnapshot(currentBook);
 
 
           const status =
@@ -1607,6 +1833,8 @@ function openEditor(book) {
 
         <div class="editor-header-right">
           <span id="saveStatus">저장됨</span>
+          <button id="historyButton" class="header-tool-button">기록</button>
+          <button id="exportButton" class="header-tool-button">내보내기</button>
           <button id="deleteCurrentBookButton" class="danger-button">책 삭제</button>
         </div>
 
@@ -1651,6 +1879,12 @@ function openEditor(book) {
 
 
           <div class="toolbar">
+            <button data-command="undo" title="실행 취소">↶</button>
+            <button data-command="redo" title="다시 실행">↷</button>
+            <span class="toolbar-divider"></span>
+            <button data-search="find" title="찾기">찾기</button>
+            <button data-search="replace" title="찾기 및 바꾸기">바꾸기</button>
+            <span class="toolbar-divider"></span>
 
             <button
               data-command="bold"
@@ -1731,6 +1965,8 @@ function openEditor(book) {
             spellcheck="true"
           ></div>
 
+          <div id="editorStats" class="editor-stats"></div>
+
 
         </main>
 
@@ -1775,6 +2011,18 @@ function openEditor(book) {
 
   document.getElementById("deleteCurrentBookButton").onclick = () => {
     deleteBook(currentBook);
+  };
+
+  document.getElementById("historyButton").onclick = showVersionHistory;
+
+  document.getElementById("exportButton").onclick = () => {
+    const choice = prompt("내보내기 형식: PDF / DOCX / HWPX", "PDF");
+    if (!choice) return;
+    const format = choice.trim().toLowerCase();
+    if (format === "pdf") exportPdf();
+    else if (format === "docx" || format === "word") exportDocx();
+    else if (format === "hwpx" || format === "hwp" || format === "한글") exportHwp();
+    else showError("PDF, DOCX, HWPX 중 하나를 입력하세요.");
   };
 
 
@@ -1858,6 +2106,7 @@ function openEditor(book) {
     () => {
 
       updateCurrentChapter();
+      updateStats();
 
       queueSave();
 
@@ -1876,6 +2125,39 @@ function openEditor(book) {
     }
   );
 
+
+  /* -----------------------------------------
+     단축키 / 검색 / 실행 취소
+  ----------------------------------------- */
+
+  document.addEventListener("keydown", event => {
+    if (!document.getElementById("editor")) return;
+    const key = event.key.toLowerCase();
+
+    if ((event.ctrlKey || event.metaKey) && key === "f") {
+      event.preventDefault();
+      findText();
+      return;
+    }
+
+    if ((event.ctrlKey || event.metaKey) && key === "h") {
+      event.preventDefault();
+      replaceInBook();
+      return;
+    }
+
+    if ((event.ctrlKey || event.metaKey) && (key === "y" || (event.shiftKey && key === "z"))) {
+      event.preventDefault();
+      document.execCommand("redo");
+      updateCurrentChapter();
+      updateStats();
+      queueSave();
+    }
+  });
+
+  document.querySelectorAll("[data-search]").forEach(button => {
+    button.onclick = () => button.dataset.search === "find" ? findText() : replaceInBook();
+  });
 
   /* -----------------------------------------
      선택 영역
@@ -2018,6 +2300,7 @@ function openEditor(book) {
 
 
   renderEditorContent();
+  updateStats();
 }
 
 
