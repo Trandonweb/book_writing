@@ -1629,6 +1629,7 @@ function openChapter(index) {
 
 
   renderEditorContent();
+  updateStats();
 }
 
 
